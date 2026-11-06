@@ -543,6 +543,27 @@ namespace SqlTools.Completion
         }
 
         /// <summary>
+        /// <see cref="ExpandStar"/> e depois formata a instrução (se <paramref name="format"/> não for null).
+        /// Devolve o texto inteiro novo e o cursor logo depois da última coluna, ou null.
+        /// </summary>
+        public static string ExpandStarText(string text, int caret, DatabaseMetadata md, Format.FormatOptions format, out int newCaret)
+        {
+            newCaret = caret;
+            var edits = ExpandStar(text, caret, md);
+            if (edits == null) return null;
+            var star = edits.First(e => e.IsColumns);
+            int shift = edits.Where(e => e.Start < star.Start).Sum(e => e.Text.Length - e.Length);
+            foreach (var e in edits) text = text.Remove(e.Start, e.Length).Insert(e.Start, e.Text);
+            newCaret = star.Start + shift + star.Text.Length;
+            if (format == null) return text;
+
+            var f = Format.SqlFormatter.FormatStatementAt(text, newCaret, format, out var formattedCaret);
+            if (f == null) return text;
+            newCaret = formattedCaret;
+            return text.Remove(f.Start, f.Length).Insert(f.Start, f.Text);
+        }
+
+        /// <summary>
         /// Tab no fim de "INSERT [INTO] tabela": troca pelo INSERT completo no layout do "Script as INSERT" do SSMS,
         /// com as colunas que aceitam valor e um marcador &lt;Coluna&gt; para cada valor. O primeiro marcador fica selecionado.
         /// </summary>

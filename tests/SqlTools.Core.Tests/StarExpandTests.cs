@@ -47,6 +47,15 @@ namespace SqlTools.Core.Tests
         }
 
         [Fact]
+        public void Formata_so_a_instrucao_e_cursor_depois_da_ultima_coluna()
+        {
+            var text = "PRINT 'a';\n  SELECT * FROM Customer WHERE Name = 'x';\nselect 2";
+            var r = CompletionEngine.ExpandStarText(text, text.IndexOf('*'), CompletionTests.Sample(), new SqlTools.Format.FormatOptions(), out var caret);
+            Assert.Equal("PRINT 'a';\n  SELECT\n      c.CustomerID,\n      c.Name,\n      c.Email\n  FROM Customer c\n  WHERE Name = 'x';\nselect 2", r);
+            Assert.Equal(r.IndexOf("c.Email") + "c.Email".Length, caret);
+        }
+
+        [Fact]
         public void Fora_do_star_nao_faz_nada()
         {
             Assert.Null(Expand("SELECT * FROM Cust|omer"));

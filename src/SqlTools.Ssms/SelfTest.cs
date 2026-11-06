@@ -275,8 +275,12 @@ namespace SqlTools.Ssms
             await EditorAccess.SendTabAsync(view);
             await Task.Delay(500);
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            var expanded = view.TextSnapshot.GetText();
-            check("Completion: Tab no * expande com alias", expanded == "SELECT c.CustomerID, c.Name, c.Email FROM Customer c", expanded);
+            var expanded = view.TextSnapshot.GetText().Replace("\r\n", "\n");
+            check("Completion: Tab no * expande com alias e formata", expanded == "SELECT\n    c.CustomerID,\n    c.Name,\n    c.Email\nFROM Customer c", expanded.Replace("\n", "⏎"));
+            dte.ExecuteCommand("Edit.Undo");
+            await Task.Delay(200);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            check("Completion: um Ctrl+Z desfaz a expansão", view.TextSnapshot.GetText() == "SELECT * FROM Customer", view.TextSnapshot.GetText());
 
             // INSERT INTO tabela + Tab (digitado: a lista está aberta com o nome inteiro)
             SetText(dte, "");

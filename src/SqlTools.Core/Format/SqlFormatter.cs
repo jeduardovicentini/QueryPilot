@@ -17,6 +17,15 @@ namespace SqlTools.Format
         public bool LeadingCommas { get; set; }
         /// <summary>Subconsultas, CASE e listas (exceto a do SELECT) até este tamanho ficam numa linha (0 = sempre quebrar).</summary>
         public int InlineMaxLength { get; set; } = 60;
+        /// <summary>Quebra de linha da saída (null = a do texto; sem quebra no texto, \r\n).</summary>
+        public string NewLine { get; set; }
+
+        internal FormatOptions With(string newLine)
+        {
+            var c = (FormatOptions)MemberwiseClone();
+            c.NewLine = newLine;
+            return c;
+        }
     }
 
     public sealed class FormatResult
@@ -65,6 +74,44 @@ namespace SqlTools.Format
             for (int i = 0; i < lines.Length; i++)
                 if (lines[i].Length > 0) lines[i] = baseIndent + lines[i];
             return FormatResult.Ok(string.Join(nl, lines));
+        }
+
+        /// <summary>
+        /// Formata só a instrução que contém <paramref name="position"/> (mantendo o recuo da linha dela).
+        /// Devolve null se não formatar; <paramref name="newPosition"/> é a mesma posição no texto novo.
+        /// </summary>
+        public static Completion.TextEdit FormatStatementAt(string text, int position, FormatOptions options, out int newPosition)
+        {
+            newPosition = position;
+            var t = SqlTokenizer.Tokenize(text).Where(x => x.Kind != TokenKind.Comment).ToList();
+            if (t.Count == 0) return null;
+            var starts = Completion.SqlContextAnalyzer.SegmentStatements(t);
+            int at = t.FindIndex(x => x.End >= position);
+            if (at < 0) at = t.Count - 1;
+            int first = Array.IndexOf(starts, starts[at]);
+            int last = Array.LastIndexOf(starts, starts[at]);
+
+            int start = t[first].Start, end = t[last].End;
+            int lineStart = text.LastIndexOf('\n', Math.Max(0, start - 1)) + 1;
+            if (start == 0) lineStart = 0;
+            var lead = text.Substring(lineStart, start - lineStart);
+            string baseIndent = null;
+            if (lead.Trim().Length == 0) { baseIndent = lead; start = lineStart; }
+
+            var original = text.Substring(start, end - start);
+            var nl = text.Contains("\r\n") || !text.Contains("\n") ? "\r\n" : "\n";
+            var r = Format(original, (options ?? new FormatOptions()).With(nl), baseIndent);
+            if (!r.Success) return null;
+
+            // mesma posição relativa ao texto (só espaços mudam)
+            int sig = 0;
+            for (int i = start; i < position && i < end; i++) if (!char.IsWhiteSpace(text[i])) sig++;
+            int mapped = 0, n = 0;
+            if (sig > 0)
+                for (int i = 0; i < r.Text.Length; i++)
+                    if (!char.IsWhiteSpace(r.Text[i]) && ++n == sig) { mapped = i + 1; break; }
+            newPosition = position >= end ? position - original.Length + r.Text.Length : start + mapped;
+            return new Completion.TextEdit { Start = start, Length = end - start, Text = r.Text };
         }
 
         private static string Verify(List<SqlToken> a, List<SqlToken> b)
@@ -178,7 +225,7 @@ namespace SqlTools.Format
                 _src = src;
                 _t = tokens;
                 _o = o;
-                _nl = src.Contains("\r\n") || !src.Contains("\n") ? "\r\n" : "\n";
+                _nl = o.NewLine ?? (src.Contains("\r\n") || !src.Contains("\n") ? "\r\n" : "\n");
                 _nlBefore = new int[tokens.Count];
                 for (int i = 0; i < tokens.Count; i++)
                 {

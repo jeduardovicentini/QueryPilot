@@ -66,12 +66,16 @@ namespace SqlTools.Ssms.Completion
 
                 if (atStar)
                 {
-                    var edits = CompletionEngine.ExpandStar(text, caret, md);
-                    if (edits == null) return false;
-                    var star = edits.First(e => e.IsColumns);
-                    int shift = edits.Where(e => e.Start < star.Start).Sum(e => e.Text.Length - e.Length);
-                    Apply(buffer, edits);
-                    view.Caret.MoveTo(new SnapshotPoint(buffer.CurrentSnapshot, Math.Min(star.Start + shift + star.Text.Length, buffer.CurrentSnapshot.Length)));
+                    // expande e formata a instrução numa edição só (um Ctrl+Z desfaz tudo)
+                    var result = CompletionEngine.ExpandStarText(text, caret, md, settings.ToFormatOptions(), out var newCaret);
+                    if (result == null) return false;
+                    int pre = 0, max = Math.Min(text.Length, result.Length);
+                    while (pre < max && text[pre] == result[pre]) pre++;
+                    int suf = 0;
+                    while (suf < max - pre && text[text.Length - 1 - suf] == result[result.Length - 1 - suf]) suf++;
+                    Apply(buffer, new[] { new TextEdit { Start = pre, Length = text.Length - pre - suf, Text = result.Substring(pre, result.Length - pre - suf) } });
+                    view.Caret.MoveTo(new SnapshotPoint(buffer.CurrentSnapshot, Math.Min(newCaret, buffer.CurrentSnapshot.Length)));
+                    view.ViewScroller.EnsureSpanVisible(new SnapshotSpan(view.Caret.Position.BufferPosition, 0));
                     return true;
                 }
 
