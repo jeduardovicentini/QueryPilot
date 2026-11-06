@@ -18,7 +18,14 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 - CTEs e subconsultas expõem as colunas do SELECT delas.
 - **Tabelas temporárias e variáveis de tabela:** `CREATE TABLE #t (...)`, `SELECT ... INTO #t` e `DECLARE @t TABLE (...)` do script entram no FROM e expõem as colunas (com tipo).
 - **Parâmetros no EXEC:** `EXEC proc ␣` sugere `(todos os parâmetros)` → `@id = NULL, @saida = @saida OUTPUT` e cada parâmetro que ainda falta; depois de cada vírgula, só os pendentes.
-- **Snippets:** `ssf` + Tab → `SELECT * FROM`; também `st` (TOP 100), `scf` (COUNT), `ii`, `df`, `bt`/`ct`/`rt` (transação), `btc` (TRY/CATCH), `bte` (transação com TRY/CATCH), `cte`, `ifex`, `ctt`, `snc`; no meio da instrução: `ij`, `lj`, `rj`, `ca`, `oa`, `ob`, `gb`, `wnl`, `isn`, `inn`.
+- **Snippets:** `ssf` + Tab → `SELECT * FROM`; também `st` (TOP 100), `scf` (COUNT), `ii`, `df`, `bt`/`ct`/`rt` (transação), `btc` (TRY/CATCH), `bte` (transação com TRY/CATCH), `cte`, `ifex`, `ctt`, `snc`; no meio da instrução: `ij`, `lj`, `rj`, `ca`, `oa`, `ob`, `gb`, `wnl`, `isn`, `inn`. Os de várias linhas seguem a indentação da linha e deixam o cursor no lugar certo (ex.: `btc` para dentro do TRY).
+- **Seus snippets (v0.8):** *QueryPilot › Editar snippets...* abre o `snippets.sql` (na pasta de dados; criado com exemplos na primeira vez). Cada snippet começa com uma linha `--#atalho descrição` e vai até o próximo `--#`; `$CURSOR$` marca onde o cursor fica. Salvou (Ctrl+S), já vale no autocomplete. Um atalho igual a um embutido substitui o embutido.
+
+  ```sql
+  --#sel5 Primeiras 5 linhas sem bloquear
+  SELECT TOP 5 *
+  FROM $CURSOR$ WITH (NOLOCK)
+  ```
 - **Confirmar:** Tab ou Enter. Espaço e pontuação só confirmam quando o digitado é exatamente o item, então alias e valores digitados nunca são trocados.
 
 Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.

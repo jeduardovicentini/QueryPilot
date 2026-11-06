@@ -145,7 +145,7 @@ namespace SqlTools.Ssms.Completion
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
                 var pkg = SqlToolsPackage.Instance;
                 var conn = SsmsBridge.GetActiveWindowEditorConnection();
-                var options = new CompletionOptions { AutoAlias = pkg?.Settings.Current.CompletionAutoAlias ?? true };
+                var options = new CompletionOptions { AutoAlias = pkg?.Settings.Current.CompletionAutoAlias ?? true, UserSnippets = UserSnippetStore.Current };
                 await TaskScheduler.Default;
 
                 var md = await MetadataService.Instance.GetAsync(conn, MetadataWait, token).ConfigureAwait(false);
@@ -246,10 +246,14 @@ namespace SqlTools.Ssms.Completion
 
         public CommitResult TryCommit(IAsyncCompletionSession session, ITextBuffer buffer, CompletionItem item, char typedChar, CancellationToken token)
         {
-            if (typedChar == '\0' || typedChar == '\t' || typedChar == '\n' || typedChar == '\r') return CommitResult.Unhandled;
+            item.Properties.TryGetProperty(typeof(Suggestion), out Suggestion s);
+            if (typedChar == '\0' || typedChar == '\t' || typedChar == '\n' || typedChar == '\r')
+            {
+                if (s != null && s.Kind == SuggestionKind.Snippet) FixSnippetAfterCommit(session, buffer, s);
+                return CommitResult.Unhandled;
+            }
 
             var typed = session.ApplicableToSpan.GetText(buffer.CurrentSnapshot) ?? "";
-            item.Properties.TryGetProperty(typeof(Suggestion), out Suggestion s);
             var multiWord = s != null && (s.Kind == SuggestionKind.Join || s.Kind == SuggestionKind.JoinCondition || s.Kind == SuggestionKind.ColumnList);
             var filter = item.FilterText ?? item.DisplayText;
             var match = typed.Length > 0 && !multiWord && (Array.IndexOf(PrefixCommit, typedChar) >= 0
@@ -258,6 +262,40 @@ namespace SqlTools.Ssms.Completion
 
             // não confirmou: fecha a lista e o caractere entra normalmente
             return match ? CommitResult.Unhandled : new CommitResult(true, CommitBehavior.None);
+        }
+
+        /// <summary>
+        /// Snippet de várias linhas ou com $CURSOR$: o SSMS insere o texto pelo caminho padrão (mesmo quando o
+        /// commit diz que tratou); logo depois, indentamos as linhas seguintes como a linha atual e movemos o cursor.
+        /// </summary>
+        private static void FixSnippetAfterCommit(IAsyncCompletionSession session, ITextBuffer buffer, Suggestion s)
+        {
+            if (s.CursorOffset == null && s.InsertText.IndexOf('\n') < 0) return; // uma linha: o padrão já serve
+            var start = buffer.CurrentSnapshot.CreateTrackingPoint(session.ApplicableToSpan.GetStartPoint(buffer.CurrentSnapshot), PointTrackingMode.Negative);
+            EventHandler<CompletionItemEventArgs> handler = null;
+            handler = (sender, e) =>
+            {
+                session.ItemCommitted -= handler;
+                try
+                {
+                    var snapshot = buffer.CurrentSnapshot;
+                    var pos = start.GetPosition(snapshot);
+                    if (pos + s.InsertText.Length > snapshot.Length || snapshot.GetText(pos, s.InsertText.Length) != s.InsertText) return;
+                    var line = snapshot.GetLineFromPosition(pos);
+                    var before = snapshot.GetText(line.Start, pos - line.Start);
+                    var indent = before.Substring(0, before.Length - before.TrimStart(' ', '\t').Length);
+                    var newLine = line.LineBreakLength > 0 ? line.GetLineBreakText()
+                        : snapshot.LineCount > 1 ? snapshot.GetLineFromLineNumber(0).GetLineBreakText() : "\r\n";
+                    var text = Sql.SqlSnippets.Expand(s.InsertText, s.CursorOffset, indent, newLine, out var caret);
+                    var after = text == s.InsertText ? snapshot : buffer.Replace(new Span(pos, s.InsertText.Length), text);
+                    session.TextView.Caret.MoveTo(new SnapshotPoint(after, pos + caret));
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("Falha ao ajustar o snippet " + s.DisplayText + ".", ex);
+                }
+            };
+            session.ItemCommitted += handler;
         }
     }
 }

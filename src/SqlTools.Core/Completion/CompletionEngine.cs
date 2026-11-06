@@ -28,6 +28,8 @@ namespace SqlTools.Completion
         /// <summary>Quando definido, substitui este trecho em vez da palavra sob o cursor (ex.: expandir *).</summary>
         public int? ReplaceStart { get; set; }
         public int ReplaceLength { get; set; }
+        /// <summary>Snippet: onde o cursor fica em InsertText (null = no fim).</summary>
+        public int? CursorOffset { get; set; }
 
         public override string ToString() => Kind + ":" + DisplayText;
     }
@@ -48,6 +50,8 @@ namespace SqlTools.Completion
     {
         /// <summary>Ao escolher uma tabela no FROM/JOIN, insere também um alias curto.</summary>
         public bool AutoAlias { get; set; } = true;
+        /// <summary>Snippets do usuário (somados aos embutidos; mesmo atalho substitui).</summary>
+        public IReadOnlyList<SqlSnippet> UserSnippets { get; set; }
     }
 
     /// <summary>Tabela do escopo com o objeto do catálogo (ou as colunas da CTE/subconsulta).</summary>
@@ -75,17 +79,17 @@ namespace SqlTools.Completion
             switch (ctx.Kind)
             {
                 case ContextKind.StatementStart:
-                    AddSnippets(list, inStatementOnly: false);
+                    AddSnippets(list, opt, inStatementOnly: false);
                     AddKeywords(list);
                     break;
 
                 case ContextKind.Expression:
                     AddExpression(list, ctx, scope);
-                    AddSnippets(list, inStatementOnly: true);
+                    AddSnippets(list, opt, inStatementOnly: true);
                     break;
 
                 case ContextKind.AfterTableRef:
-                    AddSnippets(list, inStatementOnly: true);
+                    AddSnippets(list, opt, inStatementOnly: true);
                     AddKeywords(list);
                     break;
 
@@ -225,18 +229,19 @@ namespace SqlTools.Completion
             AddKeywords(list);
         }
 
-        private static void AddSnippets(List<Suggestion> list, bool inStatementOnly)
+        private static void AddSnippets(List<Suggestion> list, CompletionOptions opt, bool inStatementOnly)
         {
-            foreach (var sn in SqlSnippets.BuiltIn.Where(x => !inStatementOnly || x.InStatement))
+            foreach (var sn in SqlSnippets.Merge(opt.UserSnippets).Where(x => !inStatementOnly || x.InStatement))
                 list.Add(new Suggestion
                 {
                     DisplayText = sn.Shortcut,
                     InsertText = sn.Text,
                     FilterText = sn.Shortcut,
                     Kind = SuggestionKind.Snippet,
-                    Priority = 35,
+                    Priority = sn.IsUser ? 34 : 35,
                     Detail = sn.Description,
-                    Description = "Snippet " + sn.Shortcut + " (Tab)\n" + sn.Text
+                    Description = (sn.IsUser ? "Seu snippet " : "Snippet ") + sn.Shortcut + " (Tab)\n" + sn.Text,
+                    CursorOffset = sn.CursorOffset
                 });
         }
 

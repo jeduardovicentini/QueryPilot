@@ -269,6 +269,8 @@ namespace SqlTools.Ssms
             var snip = view.TextSnapshot.GetText();
             check("Completion: snippet ssf + Tab", snip == "SELECT * FROM", snip);
 
+            await SnippetChecksAsync(pkg, dte, view, check);
+
             // Tab com o cursor no *: expande as colunas e cria o alias
             SetText(dte, "SELECT * FROM Customer");
             view.Caret.MoveTo(new Microsoft.VisualStudio.Text.SnapshotPoint(view.TextSnapshot, 7));
@@ -522,6 +524,54 @@ namespace SqlTools.Ssms
             var cmd = dte.Commands.Item(PackageGuids.CmdSet.ToString("B"), PackageIds.ToggleTestMode);
             var binds = string.Join(" | ", ((object[])cmd.Bindings).Cast<object>());
             check("Teste: atalho Ctrl+Q, Ctrl+R", binds.IndexOf("Ctrl+Q, Ctrl+R", StringComparison.OrdinalIgnoreCase) >= 0, binds);
+        }
+
+        /// <summary>Snippets do usuário (arquivo), cursor e indentação, releitura ao salvar e o comando Editar snippets.</summary>
+        private static async Task SnippetChecksAsync(SqlToolsPackage pkg, DTE dte, Microsoft.VisualStudio.Text.Editor.IWpfTextView view, Action<string, bool, string> check)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var path = Completion.UserSnippetStore.FilePath;
+            async System.Threading.Tasks.Task<string> ExpandAsync(string start, string shortcut)
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                SetText(dte, start);
+                view.Caret.MoveTo(new Microsoft.VisualStudio.Text.SnapshotPoint(view.TextSnapshot, view.TextSnapshot.Length));
+                await EditorAccess.TypeAsync(view, shortcut);
+                await EditorAccess.SendTabAsync(view);
+                await Task.Delay(500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                return view.TextSnapshot.GetText();
+            }
+            int Caret() => view.Caret.Position.BufferPosition.Position;
+
+            File.WriteAllText(path, "-- teste\r\n--#qpx Teste do self-test\r\nSELECT *\r\nFROM $CURSOR$ WITH (NOLOCK)\r\n", Encoding.UTF8);
+            var text = await ExpandAsync("    ", "qpx");
+            var expected = "    SELECT *\r\n    FROM  WITH (NOLOCK)";
+            check("Snippets: do arquivo, com indentação", text == expected, text.Replace("\r\n", "⏎"));
+            check("Snippets: cursor no $CURSOR$", Caret() == "    SELECT *\r\n    FROM ".Length, "caret=" + Caret());
+
+            text = await ExpandAsync("", "btc");
+            check("Snippets: btc com cursor dentro do TRY", text.StartsWith("BEGIN TRY\r\n    \r\nEND TRY") && Caret() == "BEGIN TRY\r\n    ".Length, text.Replace("\r\n", "⏎") + " caret=" + Caret());
+
+            await Task.Delay(1100); // data de gravação diferente
+            File.WriteAllText(path, "--#qpx\r\nSELECT 'mudou'\r\n", Encoding.UTF8);
+            text = await ExpandAsync("", "qpx");
+            check("Snippets: salvou, já vale", text == "SELECT 'mudou'", text);
+
+            File.Delete(path);
+            object cin = null, cout = null;
+            dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.EditSnippets, ref cin, ref cout);
+            await Task.Delay(1500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var active = dte.ActiveDocument;
+            check("Snippets: Editar snippets cria e abre o arquivo", File.Exists(path) && active != null &&
+                string.Equals(active.FullName, path, StringComparison.OrdinalIgnoreCase), active?.FullName);
+            if (active != null && string.Equals(active.FullName, path, StringComparison.OrdinalIgnoreCase))
+                active.Close(vsSaveChanges.vsSaveChangesNo);
+            await Task.Delay(500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            check("Snippets: exemplos do arquivo novo no autocomplete", Completion.UserSnippetStore.Current.Count == 2 && Completion.UserSnippetStore.LastErrors.Count == 0,
+                string.Join(",", Completion.UserSnippetStore.Current.Select(x => x.Shortcut)));
         }
 
         /// <summary>Formatador pelo comando real: documento inteiro, Ctrl+Z, só a seleção e atalho.</summary>

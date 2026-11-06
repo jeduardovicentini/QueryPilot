@@ -87,6 +87,7 @@ namespace SqlTools.Ssms
                         testMode.Checked = Safety.TestModeController.IsOn(EditorAccess.GetActiveWpfTextView()?.TextBuffer);
                     };
                     mcs.AddCommand(testMode);
+                    mcs.AddCommand(new MenuCommand((s, e) => EditSnippets(), new CommandID(PackageGuids.CmdSet, PackageIds.EditSnippets)));
                 }
 
                 EnsureHistoryShortcut();
@@ -186,6 +187,22 @@ namespace SqlTools.Ssms
             catch (Exception ex)
             {
                 Log.Warn("Não foi possível atribuir o atalho " + binding + ".", ex);
+            }
+        }
+
+        /// <summary>Abre o snippets.sql do usuário (cria com exemplos na primeira vez). Salvou, já vale.</summary>
+        internal void EditSnippets()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var path = Completion.UserSnippetStore.EnsureFile();
+                Dte.ItemOperations.OpenFile(path);
+                Dte.StatusBar.Text = ProductInfo.Name + ": salve o arquivo (Ctrl+S) e os snippets já valem no autocomplete.";
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Falha ao abrir o arquivo de snippets.", ex);
             }
         }
 
@@ -344,6 +361,7 @@ namespace SqlTools.Ssms
         public const int ShowClosedTabs = 0x0106;
         public const int GoToDefinition = 0x0107;
         public const int ToggleTestMode = 0x0108;
+        public const int EditSnippets = 0x0109;
         public const int TopMenu = 0x1000;
     }
 }

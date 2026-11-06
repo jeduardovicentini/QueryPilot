@@ -87,6 +87,15 @@ Lições: o SMO dentro do SSMS levou ~32 s por tabela (Script()); o CREATE TABLE
 
 Lição: o SSMS lê o texto a executar dentro do próprio comando Query.Execute, então dá para alterar o buffer no BeforeExecute e restaurar no AfterExecute.
 
+## v0.8: snippets do usuário (entregue em 2026-11-06)
+- [x] snippets.sql na pasta de dados: `--#atalho descrição`, texto até o próximo `--#`, `$CURSOR$`; relido quando o arquivo muda
+- [x] Atalho do usuário substitui o embutido e aparece antes; erros (atalho inválido, vazio, repetido) no log
+- [x] Snippets de várias linhas: indentação da linha atual e cursor no `$CURSOR$` (também nos embutidos btc, bte, cte, ifex, ctt)
+- [x] Menu *Editar snippets...* (cria com exemplos e abre no SSMS)
+- [x] Self-test: arquivo, indentação, cursor, releitura e o comando (71 checks)
+
+Lição: no SSMS, o Tab confirma pelo caminho padrão mesmo quando o commit manager devolve "tratado"; o ajuste (indentação/cursor) vai no ItemCommitted, depois da inserção.
+
 ## Depois
 - Autocomplete: cross-database (`banco.schema.`), snippets do usuário (arquivo), colunas de funções de tabela com parâmetros
 - Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, schema compare (DacFx)

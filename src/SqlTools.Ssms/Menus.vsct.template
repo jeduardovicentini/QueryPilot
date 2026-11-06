@@ -84,6 +84,16 @@
           <LocCanonicalName>.$ProductName$.FormatSql</LocCanonicalName>
         </Strings>
       </Button>
+      <Button guid="guidCmdSet" id="cmdEditSnippets" priority="0x0190" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Icon guid="ImageCatalogGuid" id="Snippet" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Editar snippets...</ButtonText>
+          <CanonicalName>.$ProductName$.EditSnippets</CanonicalName>
+          <LocCanonicalName>.$ProductName$.EditSnippets</LocCanonicalName>
+        </Strings>
+      </Button>
       <Button guid="guidCmdSet" id="cmdRefreshMetadata" priority="0x0200" type="Button">
         <Parent guid="guidCmdSet" id="MainGroup" />
         <Icon guid="ImageCatalogGuid" id="Refresh" />
@@ -148,6 +158,7 @@
       <IDSymbol name="cmdShowClosedTabs" value="0x0106" />
       <IDSymbol name="cmdGoToDefinition" value="0x0107" />
       <IDSymbol name="cmdToggleTestMode" value="0x0108" />
+      <IDSymbol name="cmdEditSnippets" value="0x0109" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>
