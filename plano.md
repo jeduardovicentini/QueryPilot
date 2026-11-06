@@ -55,6 +55,15 @@ Lições da v0.2:
 - [x] Snippets embutidos (ssf, st, btc, bte, ij, lj...)
 - [x] Self-test: parâmetros, temporária e snippet digitado + Tab (34 checks)
 
+## v0.4: formatador (entregue em 2026-11-06)
+- [x] Motor próprio sobre o SqlTokenizer (ScriptDom descarta comentários e não aceita SQL incompleto)
+- [x] Verificação token a token antes de aplicar; string/comentário aberto → não formata
+- [x] Comando `Ctrl+K, Ctrl+Y` (seleção ou documento, um undo, cursor preservado) e opções (caixa, recuo, vírgula)
+- [x] Testes: 18 casos de layout + idempotência + todos os cortes de 9 scripts; self-test com 39 checks
+
+Lições: caixa só em palavras reservadas (ou contexto certo: `FETCH NEXT`, `OUTPUT` de parâmetro) — colunas como `Offset`/`Output` não podem mudar, porque bancos com collation CS quebrariam.
+
 ## Depois
 - Autocomplete: cross-database (`banco.schema.`), snippets do usuário (arquivo), colunas de funções de tabela com parâmetros
-- Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, formatter, snippets, schema compare (DacFx)
+- Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, schema compare (DacFx)
+- Formatador: alinhar `=` / aliases em colunas, perfis de estilo

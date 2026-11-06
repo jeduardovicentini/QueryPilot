@@ -22,6 +22,29 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 
 Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.
 
+## Formatador de SQL (v0.4)
+
+`Ctrl+K, Ctrl+Y` (ou *QueryPilot › Formatar SQL*) formata a seleção (linhas inteiras, mantendo o recuo) ou, sem seleção, a janela inteira. Um `Ctrl+Z` desfaz.
+
+```sql
+SELECT
+    c.Name,
+    o.OrderID
+FROM dbo.Customer c
+INNER JOIN dbo.[Order] o
+    ON o.CustomerID = c.CustomerID
+WHERE c.Active = 1
+    AND o.Total > 100
+ORDER BY c.Name
+```
+
+- Uma coluna por linha no SELECT; cláusulas, JOINs, `ON` e `AND`/`OR` em linhas próprias.
+- Subconsultas e `CASE` longos recuados; os curtos (até 60 caracteres) ficam numa linha.
+- `IF/ELSE`, `BEGIN/END`, `TRY/CATCH`, `CREATE PROCEDURE` (um parâmetro por linha), `CREATE TABLE` (uma coluna por linha), CTEs, `MERGE`, `GO`.
+- **Comentários preservados**, inclusive no meio da instrução; uma linha em branco do original continua.
+- Só mexe em espaços, quebras de linha e na caixa das palavras-chave (nomes de tabela/coluna nunca mudam). Antes de aplicar, o resultado é comparado token a token com o original; se algo diferir, ou se houver string/comentário sem fechamento, nada é alterado e a barra de status explica.
+- *Opções*: palavras-chave em MAIÚSCULAS, minúsculas ou como estão; recuo de 4, 2 espaços ou tabulação; vírgula no fim ou no começo da linha.
+
 ## v0.1: o que faz
 
 - **Histórico de queries.** Cada execução no editor (F5, Execute ou Ctrl+E) é gravada com o texto executado (só o trecho selecionado, se houver seleção), servidor, banco, login, data/hora, duração, linhas afetadas e status (OK, Erro ou Cancelada).

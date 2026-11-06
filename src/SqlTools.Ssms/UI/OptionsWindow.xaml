@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:platformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
     xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
-    Width="720" Height="640" MinWidth="560" MinHeight="480"
+    Width="720" Height="740" MinWidth="560" MinHeight="560"
     WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
     HasMaximizeButton="False" HasMinimizeButton="False" ShowInTaskbar="False"
     Background="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}"
@@ -34,6 +34,23 @@
             <TextBlock Style="{StaticResource Section}" Text="Autocomplete" />
             <CheckBox x:Name="CompletionBox" />
             <CheckBox x:Name="AutoAliasBox" Content="Inserir alias ao escolher uma tabela no FROM/JOIN (Customer → Customer c)" Margin="18,3,0,3" />
+
+            <TextBlock Style="{StaticResource Section}" Text="Formatação (Ctrl+K, Ctrl+Y)" Margin="0,18,0,6" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Palavras-chave" VerticalAlignment="Center" />
+                <ComboBox x:Name="KeywordCaseBox" Width="130" Margin="6,0,18,0">
+                    <ComboBoxItem Content="MAIÚSCULAS" />
+                    <ComboBoxItem Content="minúsculas" />
+                    <ComboBoxItem Content="Manter" />
+                </ComboBox>
+                <TextBlock Text="Recuo" VerticalAlignment="Center" />
+                <ComboBox x:Name="IndentBox" Width="110" Margin="6,0,0,0">
+                    <ComboBoxItem Content="4 espaços" Tag="4" />
+                    <ComboBoxItem Content="2 espaços" Tag="2" />
+                    <ComboBoxItem Content="Tabulação" Tag="0" />
+                </ComboBox>
+            </StackPanel>
+            <CheckBox x:Name="LeadingCommasBox" Content="Vírgula no começo da linha (, coluna)" Margin="0,6,0,3" />
 
             <TextBlock Style="{StaticResource Section}" Text="Histórico de queries" Margin="0,18,0,6" />
             <CheckBox x:Name="CaptureBox" Content="Gravar toda query executada" />

@@ -275,7 +275,50 @@ namespace SqlTools.Ssms
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var md = await Completion.MetadataService.Instance.GetAsync(c2, TimeSpan.FromSeconds(60), System.Threading.CancellationToken.None);
             check("Completion: recarga de metadados", md != null && md.ForeignKeys.Count == 3, sw.ElapsedMilliseconds + " ms");
+
+            await FormatChecksAsync(dte, view, check);
             SetText(dte, "");
+        }
+
+        /// <summary>Formatador pelo comando real: documento inteiro, Ctrl+Z, só a seleção e atalho.</summary>
+        private static async Task FormatChecksAsync(DTE dte, Microsoft.VisualStudio.Text.Editor.IWpfTextView view, Action<string, bool, string> check)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            async System.Threading.Tasks.Task<string> RunFormat()
+            {
+                object cin = null, cout = null;
+                dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.FormatSql, ref cin, ref cout);
+                await Task.Delay(300);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                return view.TextSnapshot.GetText().Replace("\r\n", "\n");
+            }
+
+            var original = "select c.Name, o.OrderID from Customer c join [Order] o on o.CustomerID = c.CustomerID where c.CustomerID = 1";
+            SetText(dte, original);
+            var doc = await RunFormat();
+            var expected = "SELECT\n    c.Name,\n    o.OrderID\nFROM Customer c\nJOIN [Order] o\n    ON o.CustomerID = c.CustomerID\nWHERE c.CustomerID = 1";
+            check("Formatar: documento inteiro", doc == expected, doc.Replace("\n", "⏎"));
+
+            dte.ExecuteCommand("Edit.Undo");
+            await Task.Delay(200);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            check("Formatar: um Ctrl+Z desfaz tudo", view.TextSnapshot.GetText() == original, view.TextSnapshot.GetText());
+
+            SetText(dte, "select 1\r\n  select a, b from t\r\nselect 2");
+            view.Selection.Select(view.TextSnapshot.GetLineFromLineNumber(1).Extent, false);
+            var part = await RunFormat();
+            check("Formatar: só a seleção (mantém o recuo)", part == "select 1\n  SELECT\n      a,\n      b\n  FROM t\nselect 2", part.Replace("\n", "⏎"));
+
+            SetText(dte, "select 'sem fim from t");
+            var bad = await RunFormat();
+            check("Formatar: SQL incompleto fica intacto", bad == "select 'sem fim from t", bad);
+
+            Command fmtCmd = null;
+            foreach (Command c in dte.Commands)
+                if (string.Equals(c.Guid, PackageGuids.CmdSet.ToString("B"), StringComparison.OrdinalIgnoreCase) && c.ID == PackageIds.FormatSql) { fmtCmd = c; break; }
+            var b = fmtCmd?.Bindings as object[];
+            var bt = b == null ? "" : string.Join(" | ", b.Select(x => x.ToString()));
+            check("Formatar: atalho Ctrl+K, Ctrl+Y", bt.IndexOf("Ctrl+K, Ctrl+Y", StringComparison.OrdinalIgnoreCase) >= 0, fmtCmd?.Name + " " + bt);
         }
 
         private static void SetText(DTE dte, string text)

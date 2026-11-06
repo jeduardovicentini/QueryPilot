@@ -36,6 +36,16 @@
           <LocCanonicalName>.$ProductName$.QueryHistory</LocCanonicalName>
         </Strings>
       </Button>
+      <Button guid="guidCmdSet" id="cmdFormatSql" priority="0x0150" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Icon guid="ImageCatalogGuid" id="FormatDocument" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Formatar SQL</ButtonText>
+          <CanonicalName>.$ProductName$.FormatSql</CanonicalName>
+          <LocCanonicalName>.$ProductName$.FormatSql</LocCanonicalName>
+        </Strings>
+      </Button>
       <Button guid="guidCmdSet" id="cmdRefreshMetadata" priority="0x0200" type="Button">
         <Parent guid="guidCmdSet" id="MainGroup" />
         <Icon guid="ImageCatalogGuid" id="Refresh" />
@@ -77,6 +87,8 @@
   <KeyBindings>
     <!-- Ctrl+Q, Ctrl+E — mesmo atalho do ApexSQL Complete -->
     <KeyBinding guid="guidCmdSet" id="cmdShowHistory" editor="guidVSStd97" key1="Q" mod1="Control" key2="E" mod2="Control" />
+    <!-- Ctrl+K, Ctrl+Y — mesmo atalho de formatação do SQL Prompt -->
+    <KeyBinding guid="guidCmdSet" id="cmdFormatSql" editor="guidVSStd97" key1="K" mod1="Control" key2="Y" mod2="Control" />
   </KeyBindings>
 
   <Symbols>
@@ -89,6 +101,7 @@
       <IDSymbol name="cmdOptions" value="0x0101" />
       <IDSymbol name="cmdOpenLog" value="0x0102" />
       <IDSymbol name="cmdRefreshMetadata" value="0x0103" />
+      <IDSymbol name="cmdFormatSql" value="0x0104" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

@@ -73,9 +73,11 @@ namespace SqlTools.Ssms
                     mcs.AddCommand(new MenuCommand((s, e) => ShowOptions(), new CommandID(PackageGuids.CmdSet, PackageIds.Options)));
                     mcs.AddCommand(new MenuCommand((s, e) => OpenDataFolder(), new CommandID(PackageGuids.CmdSet, PackageIds.OpenDataFolder)));
                     mcs.AddCommand(new MenuCommand((s, e) => RefreshMetadata(), new CommandID(PackageGuids.CmdSet, PackageIds.RefreshMetadata)));
+                    mcs.AddCommand(new MenuCommand((s, e) => FormatSql(), new CommandID(PackageGuids.CmdSet, PackageIds.FormatSql)));
                 }
 
                 EnsureHistoryShortcut();
+                EnsureShortcut(PackageIds.FormatSql, "Global::Ctrl+K, Ctrl+Y", s => s.FormatShortcutApplied, s => s.FormatShortcutApplied = true);
                 EnsureTopMenuAllowed();
 
                 Monitor = new ExecutionMonitor(Dte, History, Settings);
@@ -133,6 +135,47 @@ namespace SqlTools.Ssms
             catch (Exception ex)
             {
                 Log.Warn("Não foi possível atribuir o atalho do histórico.", ex);
+            }
+        }
+
+        /// <summary>Atribui o atalho uma única vez, se o comando ainda não tiver nenhum (mesmo motivo do histórico).</summary>
+        private void EnsureShortcut(int commandId, string binding, Func<AppSettings, bool> applied, Action<AppSettings> markApplied)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var s = Settings.Current;
+            if (applied(s)) return;
+            try
+            {
+                foreach (Command c in Dte.Commands)
+                {
+                    if (!string.Equals(c.Guid, PackageGuids.CmdSet.ToString("B"), StringComparison.OrdinalIgnoreCase) || c.ID != commandId) continue;
+                    if (!(c.Bindings is object[] b) || b.Length == 0)
+                    {
+                        c.Bindings = new object[] { binding };
+                        Log.Info("Atalho " + binding + " atribuído a " + c.Name + ".");
+                    }
+                    break;
+                }
+                markApplied(s);
+                Settings.Save(s);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Não foi possível atribuir o atalho " + binding + ".", ex);
+            }
+        }
+
+        private void FormatSql()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var problem = Format.FormatCommand.Execute(Settings.Current);
+                Dte.StatusBar.Text = ProductInfo.Name + ": " + (problem ?? "SQL formatado.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Falha ao formatar.", ex);
             }
         }
 
@@ -246,6 +289,7 @@ namespace SqlTools.Ssms
         public const int Options = 0x0101;
         public const int OpenDataFolder = 0x0102;
         public const int RefreshMetadata = 0x0103;
+        public const int FormatSql = 0x0104;
         public const int TopMenu = 0x1000;
     }
 }
