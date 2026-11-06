@@ -6,3 +6,5 @@
 - **Reinstalar a mesma versão:** o VSIXInstaller recusa; desinstale antes (o build.ps1 -Install já faz isso).
 - **Menu invisível:** o SSMS esconde menus de topo de extensões que não estão em `Menus\AllowedExtensionMenus`, e o self-test via DTE não pega isso. Confira a barra de menus por UI Automation depois de instalar.
 - **Internals do SSMS:** confirme os nomes de campos e eventos inspecionando as DLLs (ver o padrão em README → pontos de integração) antes de assumir. O sender dos eventos não é necessariamente o objeto dono.
+- **Autocomplete:** a "sessão legada" ativa costuma ser o shim da nossa própria sessão async; antes de concluir que o IntelliSense nativo abriu, olhe o tipo da sessão.
+- **Metadados lentos:** se a query de catálogo travar, olhe `sys.dm_exec_requests.wait_type`. RESOURCE_SEMAPHORE = memory grant; evite com hints e mantenha o catálogo de sistema separado.

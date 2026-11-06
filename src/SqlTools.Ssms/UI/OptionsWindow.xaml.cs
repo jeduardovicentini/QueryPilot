@@ -26,6 +26,9 @@ namespace SqlTools.Ssms.UI
             Title = ProductInfo.Name + " — Opções";
 
             var s = store.Current;
+            CompletionBox.Content = "Usar o autocomplete do " + ProductInfo.Name + " (desliga só a lista automática do IntelliSense nativo)";
+            CompletionBox.IsChecked = s.CompletionEnabled;
+            AutoAliasBox.IsChecked = s.CompletionAutoAlias;
             CaptureBox.IsChecked = s.CaptureEnabled;
             RetentionBox.Text = s.RetentionDays.ToString(CultureInfo.InvariantCulture);
             TabColorBox.IsChecked = s.TabColoringEnabled;
@@ -85,6 +88,8 @@ namespace SqlTools.Ssms.UI
             }
 
             var s = _store.Current;
+            s.CompletionEnabled = CompletionBox.IsChecked == true;
+            s.CompletionAutoAlias = AutoAliasBox.IsChecked == true;
             s.CaptureEnabled = CaptureBox.IsChecked == true;
             s.RetentionDays = days;
             s.TabColoringEnabled = TabColorBox.IsChecked == true;

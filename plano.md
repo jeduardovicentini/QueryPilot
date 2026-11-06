@@ -23,7 +23,32 @@ Detalhes técnicos e pontos de integração: `README.md`.
 - O SSMS esconde menus de topo de extensões (`Menus\UnexpectedTopLevelMenus`) e não os mostra em Extensions. Só aparecem os que estão em `Menus\AllowedExtensionMenus` do privateregistry.bin. Solução: `tools/Allow-TopMenu.ps1` no instalador + `EnsureTopMenuAllowed` no package + submenu em Tools.
 - Para verificar menus, use UI Automation (MenuBar) e não o `IsAvailable` do DTE: o comando existir não significa que está visível.
 
-## Próximo (v0.2): autocomplete
-- Cache de metadados por conexão (reaproveitar `SsmsBridge.GetEditorConnection`)
-- Parser: ScriptDom do próprio SSMS
-- Depois: histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE
+## v0.2: autocomplete (entregue em 2026-11-06)
+
+Spike (2026-11-06): o editor SQL tem content type `SQL` (base `code`). Uma `IAsyncCompletionSource` MEF é chamada e aparece na sessão. O IntelliSense nativo (RadLangSvc, legado) **não** participa da sessão moderna; ele abre a própria lista.
+
+Decisões:
+- Autocomplete completo do QueryPilot (async completion MEF). Quando ligado, desliga só o "Auto list members" do IntelliSense nativo para T-SQL (os sublinhados de erro e o Quick Info continuam); quando desligado, devolve o valor original.
+- Tokenizer próprio em Core, e não o ScriptDom: precisa funcionar com SQL incompleto enquanto se digita, ser testável e não depender da versão do SSMS.
+- Metadados: uma conexão própria por servidor+banco, criada pelo caminho do SSMS (`UIConnectionInfoUtil` → `SqlConnectionInfo.CreateConnectionObject`, que cobre todos os tipos de autenticação). Um batch com vários result sets (schemas, objetos, colunas, PKs, FKs, bancos). Cache em memória; comando "Atualizar metadados".
+
+Checklist:
+- [x] Spike: content type + MEF participando
+- [x] Core: tokenizer T-SQL (tolerante a texto incompleto)
+- [x] Core: análise de contexto (FROM/JOIN/., EXEC, USE, ON, INSERT, @, *, expressão) e tabelas no escopo com alias
+- [x] Core: modelo de metadados + loader (IDataReader) + SQL do catálogo
+- [x] Core: engine de sugestões: keywords/funções, objetos, colunas, alias automático, JOIN por FK, condições ON, expandir `*`, lista de colunas do INSERT, variáveis
+- [x] Ssms: serviço de metadados (conexão via SSMS, cache, atualizar)
+- [x] Ssms: completion source (gatilhos ao digitar, descrição com tipo/colunas)
+- [x] Ssms: liga/desliga o "Auto list members" nativo + opção nas Opções
+- [x] Self-test com banco de teste no LocalDB (FKs) + verificação de que só uma lista abre
+
+Lições da v0.2:
+- A lista nativa não passa pelo broker moderno; o `ICompletionBroker` legado só mostra um *shim* da nossa sessão (`ShimCompletionSession`).
+- O RadLangSvc relê as preferências ao abrir o editor: reaplicar o "Auto list members" em `TextViewCreated`.
+- Sessão de completion precisa fechar em espaço/pontuação (commit manager); senão o span cresce e o Tab troca a linha inteira.
+- Metadados: nada de `sys.all_*` nem variável de tabela (10-30 s); sistema separado por servidor; `OPTION (LOOP JOIN)` para não pedir memory grant (RESOURCE_SEMAPHORE no LocalDB ocupado).
+
+## Depois
+- Autocomplete: temp tables (#t) e variáveis de tabela com colunas, parâmetros de procedure no EXEC, snippets, cross-database (`banco.schema.`)
+- Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, formatter, snippets, schema compare (DacFx)

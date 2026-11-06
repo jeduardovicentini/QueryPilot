@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -10,6 +10,7 @@ using Microsoft.VisualStudio.Shell;
 using SqlTools.History;
 using SqlTools.Infra;
 using SqlTools.Ssms.Integration;
+using EditorAccess = SqlTools.Ssms.Integration.EditorAccess;
 using Task = System.Threading.Tasks.Task;
 
 namespace SqlTools.Ssms
@@ -61,6 +62,10 @@ namespace SqlTools.Ssms
                 Check("EditorControl", editor != null, editor?.GetType().FullName);
                 var conn = editor == null ? null : SsmsBridge.GetEditorConnection(editor);
                 Check("EditorConnection", conn != null && conn.Server.Equals(server, StringComparison.OrdinalIgnoreCase), conn?.Server + " / " + conn?.Database + " / " + conn?.Login);
+
+                // 1b) autocomplete
+                await CompletionChecksAsync(pkg, dte, Check);
+                if (Environment.GetEnvironmentVariable("SQLTOOLS_SELFTEST_SCOPE") == "completion") return;
 
                 // 2) execução com sucesso
                 var okQuery = "SELECT name, database_id FROM sys.databases; -- selftest " + marker;
@@ -152,6 +157,15 @@ namespace SqlTools.Ssms
             }
             finally
             {
+                // o perfil do SSMS é o do usuário: devolve a lista nativa como estava antes do teste
+                try
+                {
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    var original = pkg.Settings.Current.NativeAutoListOriginal;
+                    if (original >= 0) Completion.NativeIntelliSense.SetAutoList(original == 1);
+                }
+                catch (Exception ex) { Log.Warn("[selftest] não restaurou a lista nativa.", ex); }
+
                 results.Add(ok ? "RESULT: PASS" : "RESULT: FAIL");
                 File.WriteAllText(Path.Combine(outDir, "result.txt"), string.Join(Environment.NewLine, results), Encoding.UTF8);
                 if (Environment.GetEnvironmentVariable("SQLTOOLS_SELFTEST_EXIT") == "1")
@@ -165,6 +179,90 @@ namespace SqlTools.Ssms
                     pkg.Dte.Quit();
                 }
             }
+        }
+
+        private const string CompletionDb = "QueryPilotSelfTest";
+
+        /// <summary>Autocomplete no banco de teste criado pelo Run-SelfTest.ps1 (Customer, Order, OrderItem, sales.Product).</summary>
+        private static async Task CompletionChecksAsync(SqlToolsPackage pkg, DTE dte, Action<string, bool, string> check)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var server = Environment.GetEnvironmentVariable("SQLTOOLS_SELFTEST_SERVER");
+            if (string.IsNullOrEmpty(server)) server = @"(localdb)\MSSQLLocalDB";
+            SsmsBridge.OpenNewQueryWindow(SsmsBridge.BuildConnection(server, "", CompletionDb));
+            await Task.Delay(3000);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            var conn = SsmsBridge.GetActiveWindowEditorConnection();
+            check("Completion: janela no banco de teste", conn != null && conn.Database == CompletionDb, conn?.Database);
+            check("Completion: lista nativa automática desligada", Completion.NativeIntelliSense.GetAutoList() == false, "");
+
+            var view = EditorAccess.GetActiveWpfTextView();
+            check("Completion: editor SQL", view?.TextBuffer.ContentType.TypeName == Completion.SqlContentType.Name, view?.TextBuffer.ContentType.TypeName);
+            if (view == null) return;
+
+            async System.Threading.Tasks.Task<List<string>> ItemsAt(string textWithCaret)
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                var caret = textWithCaret.IndexOf('|');
+                SetText(dte, textWithCaret.Remove(caret, 1));
+                view.Caret.MoveTo(new Microsoft.VisualStudio.Text.SnapshotPoint(view.TextSnapshot, caret));
+                // a primeira lista pode chegar antes dos metadados; tenta de novo
+                List<string> items = null;
+                for (int i = 0; i < 4; i++)
+                {
+                    items = await EditorAccess.CollectCompletionItemsAsync(view);
+                    if (items.Count > 0 && items.Any(x => !SqlTools.Sql.SqlKeywords.Suggested.Contains(x))) break;
+                    await Task.Delay(1500);
+                }
+                Log.Info("[selftest] " + textWithCaret.Replace("\n", " ") + " → " + string.Join(" | ", items.Take(12)));
+                return items;
+            }
+
+            var join = await ItemsAt("SELECT * FROM Customer c JOIN |");
+            check("Completion: JOIN pela FK", join.Contains("[Order] o ON o.CustomerID = c.CustomerID"), join.FirstOrDefault());
+            var cols = await ItemsAt("SELECT c.| FROM Customer c");
+            check("Completion: colunas pelo alias", cols.Count == 3 && new[] { "CustomerID", "Name", "Email" }.All(cols.Contains), string.Join(",", cols));
+            var star = await ItemsAt("SELECT *| FROM Customer");
+            check("Completion: expandir *", star.Contains("* → 3 colunas"), string.Join(",", star));
+            var exec = await ItemsAt("EXEC |");
+            check("Completion: procedures", exec.Contains("usp_GetCustomer"), "");
+            var sch = await ItemsAt("SELECT * FROM sales.|");
+            check("Completion: objetos do schema", sch.Contains("Product"), string.Join(",", sch));
+            var sysv = await ItemsAt("SELECT * FROM sys.|");
+            check("Completion: views de sistema (sys.)", sysv.Contains("objects") && sysv.Contains("tables"), sysv.Count + " itens");
+
+            // digitação real: a lista abre sozinha depois de "FROM " e o Tab insere a tabela com alias
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            SetText(dte, "");
+            var typed = await EditorAccess.TypeAsync(view, "SELECT * FROM Cust");
+            var broker = EditorAccess.ComponentModel.GetService<Microsoft.VisualStudio.Language.Intellisense.AsyncCompletion.IAsyncCompletionBroker>();
+            check("Completion: lista abriu ao digitar", broker.IsCompletionActive(view), typed);
+#pragma warning disable CS0618 // broker legado: é por ele que a lista nativa aparece
+            var legacy = EditorAccess.ComponentModel.GetService<Microsoft.VisualStudio.Language.Intellisense.ICompletionBroker>();
+            foreach (var ls in legacy?.GetSessions(view) ?? (IEnumerable<Microsoft.VisualStudio.Language.Intellisense.ICompletionSession>)new Microsoft.VisualStudio.Language.Intellisense.ICompletionSession[0])
+                Log.Info("[selftest] sessão legada " + ls.GetType().FullName + ": " + string.Join(" | ", ls.CompletionSets.Select(cs => cs.GetType().Name + "[" + string.Join(",", cs.Completions.Take(8).Select(c => c.DisplayText)) + "]")));
+            var asyncSession = broker.GetSession(view);
+            if (asyncSession != null)
+                Log.Info("[selftest] sessão async: " + string.Join(" | ", asyncSession.GetComputedItems(System.Threading.CancellationToken.None).Items.Take(8).Select(i => i.DisplayText)));
+            // o broker legado também enxerga a nossa sessão (ShimCompletionSession); nativa seria outra
+            var native = ((IEnumerable<Microsoft.VisualStudio.Language.Intellisense.ICompletionSession>)legacy?.GetSessions(view) ?? new Microsoft.VisualStudio.Language.Intellisense.ICompletionSession[0])
+                .Where(x => !x.IsDismissed && x.GetType().Name != "ShimCompletionSession").ToList();
+            check("Completion: lista nativa não abriu junto", native.Count == 0, string.Join(",", native.Select(x => x.GetType().Name)));
+#pragma warning restore CS0618
+            await EditorAccess.SendTabAsync(view);
+            await Task.Delay(500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var final = view.TextSnapshot.GetText();
+            check("Completion: Tab insere tabela com alias", final == "SELECT * FROM Customer c", final);
+
+            // recarga a quente (Atualizar metadados)
+            var c2 = SsmsBridge.GetActiveWindowEditorConnection();
+            Completion.MetadataService.Instance.Invalidate(c2);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var md = await Completion.MetadataService.Instance.GetAsync(c2, TimeSpan.FromSeconds(60), System.Threading.CancellationToken.None);
+            check("Completion: recarga de metadados", md != null && md.ForeignKeys.Count == 3, sw.ElapsedMilliseconds + " ms");
+            SetText(dte, "");
         }
 
         private static void SetText(DTE dte, string text)

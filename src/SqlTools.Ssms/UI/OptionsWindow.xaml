@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:platformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
     xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
-    Width="720" Height="560" MinWidth="560" MinHeight="420"
+    Width="720" Height="640" MinWidth="560" MinHeight="480"
     WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
     HasMaximizeButton="False" HasMinimizeButton="False" ShowInTaskbar="False"
     Background="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}"
@@ -31,7 +31,11 @@
         </DockPanel>
 
         <StackPanel DockPanel.Dock="Top">
-            <TextBlock Style="{StaticResource Section}" Text="Histórico de queries" />
+            <TextBlock Style="{StaticResource Section}" Text="Autocomplete" />
+            <CheckBox x:Name="CompletionBox" />
+            <CheckBox x:Name="AutoAliasBox" Content="Inserir alias ao escolher uma tabela no FROM/JOIN (Customer → Customer c)" Margin="18,3,0,3" />
+
+            <TextBlock Style="{StaticResource Section}" Text="Histórico de queries" Margin="0,18,0,6" />
             <CheckBox x:Name="CaptureBox" Content="Gravar toda query executada" />
             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                 <TextBlock Text="Manter por" VerticalAlignment="Center" />

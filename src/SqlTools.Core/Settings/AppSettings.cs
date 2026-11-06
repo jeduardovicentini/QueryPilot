@@ -10,6 +10,12 @@ namespace SqlTools.Settings
         [DataMember] public int RetentionDays { get; set; } = 90;
         [DataMember] public bool TabColoringEnabled { get; set; } = true;
         [DataMember] public List<ColorRule> ColorRules { get; set; } = new List<ColorRule>();
+        /// <summary>Autocomplete do produto (desliga a lista automática do IntelliSense nativo enquanto ativo).</summary>
+        [DataMember] public bool CompletionEnabled { get; set; } = true;
+        /// <summary>Ao escolher uma tabela no FROM/JOIN, inserir um alias curto.</summary>
+        [DataMember] public bool CompletionAutoAlias { get; set; } = true;
+        /// <summary>Interno: valor original do "Auto list members" nativo (-1 = não guardado).</summary>
+        [DataMember] public int NativeAutoListOriginal { get; set; } = -1;
         /// <summary>Interno: o atalho do histórico já foi configurado uma vez.</summary>
         [DataMember] public bool HistoryShortcutApplied { get; set; }
         /// <summary>Interno: o menu de topo já foi liberado uma vez em Extensions › Customize Menu.</summary>
@@ -38,6 +44,9 @@ namespace SqlTools.Settings
             RetentionDays = 90;
             TabColoringEnabled = true;
             ColorRules = new List<ColorRule>();
+            CompletionEnabled = true;
+            CompletionAutoAlias = true;
+            NativeAutoListOriginal = -1;
         }
     }
 }

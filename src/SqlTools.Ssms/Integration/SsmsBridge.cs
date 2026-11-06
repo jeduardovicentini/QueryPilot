@@ -112,6 +112,14 @@ namespace SqlTools.Ssms.Integration
             return snap;
         }
 
+        /// <summary>Conexão do editor de query ativo (null se não for um editor SQL ou não estiver conectado).</summary>
+        public static ConnectionSnapshot GetActiveWindowEditorConnection()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var editor = GetEditorControl(GetActiveDocumentFrame());
+            return editor == null ? null : GetEditorConnection(editor);
+        }
+
         /// <summary>Conexão da janela ativa segundo o ScriptFactory (fallback).</summary>
         public static ConnectionSnapshot GetActiveWindowConnection()
         {
@@ -256,6 +264,44 @@ namespace SqlTools.Ssms.Integration
         {
             var p = target.GetType().GetProperty(prop, BindingFlags.Instance | BindingFlags.Public);
             p?.SetValue(target, value, null);
+        }
+
+        // ---------- Conexão própria (metadados do autocomplete) ----------
+
+        private static MethodInfo _getCoreConnectionInfo;
+
+        /// <summary>
+        /// Cria uma conexão nova (fechada) com as mesmas credenciais da janela, pelo caminho que o próprio SSMS usa
+        /// (UIConnectionInfoUtil.GetCoreConnectionInfo → SqlConnectionInfo.CreateConnectionObject). Cobre Windows, SQL e Entra.
+        /// </summary>
+        public static System.Data.Common.DbConnection CreateDbConnection(object uiConnectionInfo, string database)
+        {
+            if (uiConnectionInfo == null) return null;
+            try
+            {
+                if (_getCoreConnectionInfo == null)
+                {
+                    var util = Reflect.FindType("Microsoft.SqlServer.Management.UI.ConnectionDlg.UIConnectionInfoUtil", "ConnectionDlg")
+                        ?? Reflect.FindType("Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfoUtil", "ConnectionDlg");
+                    _getCoreConnectionInfo = util?.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                        .FirstOrDefault(m => m.Name == "GetCoreConnectionInfo" && m.GetParameters().Length == 1);
+                    if (_getCoreConnectionInfo == null)
+                    {
+                        WarnOnce("coreconn", "UIConnectionInfoUtil.GetCoreConnectionInfo não encontrado; autocomplete sem metadados.");
+                        return null;
+                    }
+                }
+                var info = _getCoreConnectionInfo.Invoke(null, new[] { uiConnectionInfo });
+                if (info == null) return null;
+                if (!string.IsNullOrEmpty(database)) Set(info, "DatabaseName", database);
+                Set(info, "ApplicationName", ProductInfo.Name + " IntelliSense");
+                return Reflect.Invoke(info, "CreateConnectionObject") as System.Data.Common.DbConnection;
+            }
+            catch (Exception ex)
+            {
+                WarnOnce("createconn", "Não foi possível criar a conexão de metadados.", ex);
+                return null;
+            }
         }
 
         /// <summary>Abre uma nova janela de query (conectada se <paramref name="uiConnection"/> != null).</summary>

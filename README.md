@@ -2,6 +2,23 @@
 
 Extensão gratuita e de código aberto para o **SQL Server Management Studio 22**.
 
+## Autocomplete (v0.2)
+
+Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o Quick Info do SSMS continuam). A lista abre sozinha ao começar uma palavra, depois de `.`, `@` e de `FROM ␣`, `JOIN ␣`, `EXEC ␣`, `USE ␣`, `ON ␣`; `Ctrl+Espaço` abre em qualquer lugar.
+
+- **Tabelas com alias automático:** `FROM Cust` + Tab → `FROM Customer c` (schema só quando não é o padrão: `sales.Product p`).
+- **JOIN completo pelas FKs:** depois de `JOIN`, sugere `[Order] o ON o.CustomerID = c.CustomerID` para cada FK entre as tabelas já usadas e as outras.
+- **Condição do ON:** `JOIN Customer c ON ␣` → `c.CustomerID = o.CustomerID`.
+- **Colunas no escopo:** no SELECT, WHERE, ORDER BY etc., as colunas das tabelas do FROM (mesmo o FROM vindo depois do cursor). Nome repetido em duas tabelas aparece como `c.Id` / `o.Id`.
+- **`alias.`** lista as colunas; **`schema.`** lista os objetos; **`sys.`** as views de sistema.
+- **Expandir `*`:** cursor depois de `*` (ou `o.*`) + `Ctrl+Espaço` → lista de colunas.
+- **INSERT:** `INSERT INTO t ␣` sugere `(col1, col2, ...)` sem identity, calculadas e rowversion.
+- **EXEC** sugere procedures (com parâmetros na descrição); **USE**, bancos; **@**, variáveis do batch.
+- CTEs e subconsultas expõem as colunas do SELECT delas.
+- **Confirmar:** Tab ou Enter. Espaço e pontuação só confirmam quando o digitado é exatamente o item, então alias e valores digitados nunca são trocados.
+
+Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.
+
 ## v0.1: o que faz
 
 - **Histórico de queries.** Cada execução no editor (F5, Execute ou Ctrl+E) é gravada com o texto executado (só o trecho selecionado, se houver seleção), servidor, banco, login, data/hora, duração, linhas afetadas e status (OK, Erro ou Cancelada).
@@ -56,6 +73,9 @@ O código interno (solução, projetos e namespaces) usa o nome de trabalho `Sql
 | Conexão da janela | `ScriptAndResultsEditorControl.Connection` / `m_connection` |
 | Abrir query conectada | `ServiceCache.ScriptFactory.CreateNewBlankScript(ScriptType.Sql, UIConnectionInfo, null)` |
 | Aba → janela | `DocumentTabItem.View.WindowFrame` (cor desenhada com `Adorner`) |
+| Editor SQL (MEF) | content type `SQL` (RadLangSvc); `IAsyncCompletionSource` + commit manager |
+| Lista nativa | `LANGPREFERENCES3.fAutoListMembers` do language service `{c4d96929-a9b0-42cc-b3e0-adac0435d7f2}` |
+| Conexão de metadados | `UIConnectionInfoUtil.GetCoreConnectionInfo` → `SqlConnectionInfo.CreateConnectionObject()` |
 | Menu de topo visível | `Menus\AllowedExtensionMenus` no `privateregistry.bin` (`tools/Allow-TopMenu.ps1`) |
 
 ### Teste de integração no SSMS real
@@ -65,7 +85,7 @@ O código interno (solução, projetos e namespaces) usa o nome de trabalho `Sql
 .\tools\Run-SelfTest.ps1      # precisa do LocalDB; usa pasta de dados isolada
 ```
 
-O teste abre o SSMS conectado em `(localdb)\MSSQLLocalDB` e verifica: execução com sucesso, seleção parcial, execução com erro, comando e atalho, cor das abas, janela de histórico, reabrir conectado e janela de opções. O resultado sai em `_scratch\selftest\result.txt`, com imagens das janelas em `_scratch\selftest\*.png`.
+O teste cria o banco `QueryPilotSelfTest` no LocalDB (tabelas com FKs, outro schema, uma procedure), abre o SSMS conectado em `(localdb)\MSSQLLocalDB` e verifica: autocomplete (JOIN pela FK, colunas do alias, expandir `*`, procedures, schema, `sys.`, digitação real com Tab, lista nativa fechada), execução com sucesso, seleção parcial, execução com erro, comando e atalho, cor das abas, janela de histórico, reabrir conectado e janela de opções. O resultado sai em `_scratch\selftest\result.txt`, com imagens das janelas em `_scratch\selftest\*.png`.
 
 ## Limitações conhecidas
 

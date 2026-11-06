@@ -72,6 +72,7 @@ namespace SqlTools.Ssms
                     mcs.AddCommand(new MenuCommand((s, e) => ShowHistory(), new CommandID(PackageGuids.CmdSet, PackageIds.ShowHistory)));
                     mcs.AddCommand(new MenuCommand((s, e) => ShowOptions(), new CommandID(PackageGuids.CmdSet, PackageIds.Options)));
                     mcs.AddCommand(new MenuCommand((s, e) => OpenDataFolder(), new CommandID(PackageGuids.CmdSet, PackageIds.OpenDataFolder)));
+                    mcs.AddCommand(new MenuCommand((s, e) => RefreshMetadata(), new CommandID(PackageGuids.CmdSet, PackageIds.RefreshMetadata)));
                 }
 
                 EnsureHistoryShortcut();
@@ -83,6 +84,18 @@ namespace SqlTools.Ssms
                 TabColorizer = new TabColorizer(Settings);
                 Monitor.ExecutionRecorded += (s, e) => TabColorizer.RefreshSoon();
                 TabColorizer.Start();
+
+                // autocomplete: depois de DDL, recarrega metadados; lista nativa segue a configuração
+                Monitor.ExecutionRecorded += (s, e) =>
+                {
+                    if (e.Status != ExecutionStatus.Running) Completion.MetadataService.Instance.OnExecuted(e.Server, e.Login, e.Database, e.QueryText);
+                };
+                Completion.NativeIntelliSense.Apply(Settings);
+                Settings.Changed += (s, e) => JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await JoinableTaskFactory.SwitchToMainThreadAsync();
+                    Completion.NativeIntelliSense.Apply(Settings);
+                }).FileAndForget(ProductInfo.Name + "/NativeIntelliSense");
 
                 Log.Info(ProductInfo.Name + " pronto. DTE " + Dte.Version + ", " + History.Count() + " execuções no histórico.");
                 SelfTest.RunIfRequested(this);
@@ -202,6 +215,22 @@ namespace SqlTools.Ssms
             try { System.Diagnostics.Process.Start("explorer.exe", "\"" + AppPaths.Root + "\""); }
             catch (Exception ex) { Log.Warn("Falha ao abrir a pasta de dados.", ex); }
         }
+
+        /// <summary>Descarta os metadados do banco da janela ativa (ou de todos) e recarrega em segundo plano.</summary>
+        private void RefreshMetadata()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var conn = SsmsBridge.GetActiveWindowEditorConnection();
+            if (conn == null)
+            {
+                Completion.MetadataService.Instance.InvalidateAll();
+                Dte.StatusBar.Text = ProductInfo.Name + ": metadados descartados; recarregam na próxima lista.";
+                return;
+            }
+            Completion.MetadataService.Instance.Invalidate(conn);
+            Dte.StatusBar.Text = ProductInfo.Name + ": recarregando metadados de " + conn.Server + "/" + conn.Database + "...";
+            _ = Completion.MetadataService.Instance.GetAsync(conn, TimeSpan.Zero, CancellationToken.None);
+        }
     }
 
     internal static class PackageGuids
@@ -216,6 +245,7 @@ namespace SqlTools.Ssms
         public const int ShowHistory = 0x0100;
         public const int Options = 0x0101;
         public const int OpenDataFolder = 0x0102;
+        public const int RefreshMetadata = 0x0103;
         public const int TopMenu = 0x1000;
     }
 }
