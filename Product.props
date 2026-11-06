@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Identidade do produto. Para trocar o nome, edite SÓ este arquivo e rode build.ps1.
+    ProductName aparece no menu, nas janelas, nas opções e no gerenciador de extensões.
+    ProductId e DataFolderName são estáveis de propósito: trocar o nome não perde o histórico
+    nem cria uma segunda extensão instalada.
+  -->
+  <PropertyGroup>
+    <ProductName>QueryPilot</ProductName>
+    <ProductPublisher>QueryPilot</ProductPublisher>
+    <ProductDescription>Histórico de queries, cor de abas por servidor e produtividade para o SQL Server Management Studio 22.</ProductDescription>
+    <ProductVersion>0.1.0</ProductVersion>
+
+    <ProductId>SqlTools.Ssms.6b1f4c2e-9d3a-4f7b-8e21-5a7c0d9e4b13</ProductId>
+    <DataFolderName>QueryPilot</DataFolderName>
+  </PropertyGroup>
+</Project>

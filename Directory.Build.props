@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)Product.props" />
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Version>$(ProductVersion)</Version>
+    <Company>$(ProductPublisher)</Company>
+    <Product>$(ProductName)</Product>
+    <Deterministic>true</Deterministic>
+    <SsmsIdeDir Condition="'$(SsmsIdeDir)' == ''">C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE</SsmsIdeDir>
+  </PropertyGroup>
+</Project>

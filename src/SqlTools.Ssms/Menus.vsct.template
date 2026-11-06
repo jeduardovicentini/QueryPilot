@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Include href="KnownImageIds.vsct" />
+
+  <Commands package="guidPackage">
+    <Menus>
+      <!-- O shell move menus de topo de extensões para dentro de "Extensions". -->
+      <Menu guid="guidCmdSet" id="TopMenu" priority="0x0700" type="Menu">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_MM_TOOLSADDINS" />
+        <Strings>
+          <ButtonText>$ProductName$</ButtonText>
+          <CommandName>$ProductName$</CommandName>
+        </Strings>
+      </Menu>
+    </Menus>
+
+    <Groups>
+      <Group guid="guidCmdSet" id="MainGroup" priority="0x0100">
+        <Parent guid="guidCmdSet" id="TopMenu" />
+      </Group>
+      <Group guid="guidCmdSet" id="SettingsGroup" priority="0x0200">
+        <Parent guid="guidCmdSet" id="TopMenu" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidCmdSet" id="cmdShowHistory" priority="0x0100" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Icon guid="ImageCatalogGuid" id="History" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Histórico de queries...</ButtonText>
+          <CanonicalName>.$ProductName$.QueryHistory</CanonicalName>
+          <LocCanonicalName>.$ProductName$.QueryHistory</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidCmdSet" id="cmdOptions" priority="0x0100" type="Button">
+        <Parent guid="guidCmdSet" id="SettingsGroup" />
+        <Icon guid="ImageCatalogGuid" id="Settings" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Opções...</ButtonText>
+          <CanonicalName>.$ProductName$.Options</CanonicalName>
+          <LocCanonicalName>.$ProductName$.Options</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidCmdSet" id="cmdOpenLog" priority="0x0200" type="Button">
+        <Parent guid="guidCmdSet" id="SettingsGroup" />
+        <Strings>
+          <ButtonText>Abrir pasta de dados e logs</ButtonText>
+          <CanonicalName>.$ProductName$.OpenDataFolder</CanonicalName>
+          <LocCanonicalName>.$ProductName$.OpenDataFolder</LocCanonicalName>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <!-- Também em Tools: o SSMS esconde menus de topo de extensões que não estão liberados em Customize Menu. -->
+  <CommandPlacements>
+    <CommandPlacement guid="guidCmdSet" id="TopMenu" priority="0x0100">
+      <Parent guid="guidSHLMainMenu" id="IDG_VS_TOOLS_EXT_TOOLS" />
+    </CommandPlacement>
+  </CommandPlacements>
+
+  <KeyBindings>
+    <!-- Ctrl+Q, Ctrl+E — mesmo atalho do ApexSQL Complete -->
+    <KeyBinding guid="guidCmdSet" id="cmdShowHistory" editor="guidVSStd97" key1="Q" mod1="Control" key2="E" mod2="Control" />
+  </KeyBindings>
+
+  <Symbols>
+    <GuidSymbol name="guidPackage" value="{3e8f2a41-7c5d-4b9e-a1f6-2d4c8b7e9a10}" />
+    <GuidSymbol name="guidCmdSet" value="{9b2c4d6e-1a3f-4e5b-8c7d-6f0a2b4c8e12}">
+      <IDSymbol name="TopMenu" value="0x1000" />
+      <IDSymbol name="MainGroup" value="0x1010" />
+      <IDSymbol name="SettingsGroup" value="0x1020" />
+      <IDSymbol name="cmdShowHistory" value="0x0100" />
+      <IDSymbol name="cmdOptions" value="0x0101" />
+      <IDSymbol name="cmdOpenLog" value="0x0102" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

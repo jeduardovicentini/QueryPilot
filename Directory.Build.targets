@@ -1,0 +1,35 @@
+<Project>
+  <!-- Gera ProductInfo.g.cs a partir de Product.props (constantes usáveis em atributos). -->
+  <Target Name="GenerateProductInfo" BeforeTargets="CoreCompile" Condition="'$(GenerateProductInfo)' == 'true'">
+    <PropertyGroup>
+      <_ProductInfoFile>$(IntermediateOutputPath)ProductInfo.g.cs</_ProductInfoFile>
+      <_ProductInfoText>
+namespace SqlTools
+{
+    public static class ProductInfo
+    {
+        public const string Name = @"$(ProductName.Replace('"','""'))"%3B
+        public const string Publisher = @"$(ProductPublisher.Replace('"','""'))"%3B
+        public const string Description = @"$(ProductDescription.Replace('"','""'))"%3B
+        public const string Version = "$(ProductVersion)"%3B
+        public const string Id = "$(ProductId)"%3B
+        public const string DataFolderName = "$(DataFolderName)"%3B
+    }
+}
+      </_ProductInfoText>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_ProductInfoFile)" Lines="$(_ProductInfoText)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(_ProductInfoFile)" />
+      <FileWrites Include="$(_ProductInfoFile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Substitui $ProductName$ etc. em arquivos-modelo (.vsct, .vsixmanifest). -->
+  <Target Name="ExpandProductTemplates" BeforeTargets="PrepareForBuild;GeneratePkgDef;VSCTCompile" Condition="'@(ProductTemplate)' != ''">
+    <WriteLinesToFile
+        File="%(ProductTemplate.OutFile)"
+        Lines="$([MSBuild]::Escape($([System.IO.File]::ReadAllText('%(ProductTemplate.FullPath)').Replace('$ProductName$','$(ProductName)').Replace('$ProductPublisher$','$(ProductPublisher)').Replace('$ProductDescription$','$(ProductDescription)').Replace('$ProductVersion$','$(ProductVersion)').Replace('$ProductId$','$(ProductId)'))))"
+        Overwrite="true" WriteOnlyWhenDifferent="true" Encoding="utf-8" />
+  </Target>
+</Project>
