@@ -64,6 +64,16 @@
           <LocCanonicalName>.$ProductName$.GoToDefinition</LocCanonicalName>
         </Strings>
       </Button>
+      <Button guid="guidCmdSet" id="cmdToggleTestMode" priority="0x0140" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Icon guid="ImageCatalogGuid" id="TestGroup" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Modo de teste (ROLLBACK automático)</ButtonText>
+          <CanonicalName>.$ProductName$.TestMode</CanonicalName>
+          <LocCanonicalName>.$ProductName$.TestMode</LocCanonicalName>
+        </Strings>
+      </Button>
       <Button guid="guidCmdSet" id="cmdFormatSql" priority="0x0150" type="Button">
         <Parent guid="guidCmdSet" id="MainGroup" />
         <Icon guid="ImageCatalogGuid" id="FormatDocument" />
@@ -116,6 +126,7 @@
     <!-- Ctrl+Q, Ctrl+E — mesmo atalho do ApexSQL Complete -->
     <KeyBinding guid="guidCmdSet" id="cmdShowHistory" editor="guidVSStd97" key1="Q" mod1="Control" key2="E" mod2="Control" />
     <KeyBinding guid="guidCmdSet" id="cmdReopenClosedTab" editor="guidVSStd97" key1="Q" mod1="Control" key2="T" mod2="Control" />
+    <KeyBinding guid="guidCmdSet" id="cmdToggleTestMode" editor="guidVSStd97" key1="Q" mod1="Control" key2="R" mod2="Control" />
     <!-- F12: o SSMS não usa (não tem Edit.GoToDefinition) -->
     <KeyBinding guid="guidCmdSet" id="cmdGoToDefinition" editor="guidVSStd97" key1="VK_F12" />
     <!-- Ctrl+K, Ctrl+Y — mesmo atalho de formatação do SQL Prompt -->
@@ -136,6 +147,7 @@
       <IDSymbol name="cmdReopenClosedTab" value="0x0105" />
       <IDSymbol name="cmdShowClosedTabs" value="0x0106" />
       <IDSymbol name="cmdGoToDefinition" value="0x0107" />
+      <IDSymbol name="cmdToggleTestMode" value="0x0108" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

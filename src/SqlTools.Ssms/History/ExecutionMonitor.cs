@@ -9,6 +9,7 @@ using SqlTools.History;
 using SqlTools.Infra;
 using SqlTools.Safety;
 using SqlTools.Settings;
+using SqlTools.Ssms.Safety;
 using SqlTools.Ssms.Integration;
 
 namespace SqlTools.Ssms.History
@@ -34,6 +35,7 @@ namespace SqlTools.Ssms.History
             public Stopwatch Clock;
             public object Editor;
             public string Database;
+            public bool TestMode;
         }
 
         public event EventHandler<HistoryEntry> ExecutionRecorded;
@@ -43,6 +45,13 @@ namespace SqlTools.Ssms.History
 
         /// <summary>Quantas execuções o alerta cancelou (self-test).</summary>
         internal int UnsafeCancelled { get; private set; }
+
+        /// <summary>Aviso do modo de teste (execução recusada, cancelada no meio). Trocável no self-test.</summary>
+        internal Action<string> Warn { get; set; } = msg =>
+            System.Windows.MessageBox.Show(msg, ProductInfo.Name + " — modo de teste", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+
+        /// <summary>Última mensagem do modo de teste (self-test).</summary>
+        internal string LastTestModeWarning { get; private set; }
 
         private static bool AskUser(IReadOnlyList<UnsafeStatement> issues)
         {
@@ -66,16 +75,25 @@ namespace SqlTools.Ssms.History
             ThreadHelper.ThrowIfNotOnUIThread();
             _executeEvents = _dte.Events.get_CommandEvents(ExecuteCmdGuid, ExecuteCmdId);
             _executeEvents.BeforeExecute += OnBeforeExecute;
+            // o SSMS já leu o texto: tira o BEGIN TRAN/ROLLBACK do modo de teste
+            _executeEvents.AfterExecute += (g, i, a, b) =>
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                TestModeController.Restore();
+            };
             Log.Info("Monitor de execução ativo.");
         }
 
         private void OnBeforeExecute(string guid, int id, object customIn, object customOut, ref bool cancelDefault)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            var testMode = false;
             try
             {
                 var settings = _settings.Current;
-                if (!settings.CaptureEnabled && !settings.UnsafeGuardEnabled) return;
+                var view = EditorAccess.GetActiveWpfTextView();
+                testMode = view != null && TestModeController.IsOn(view.TextBuffer);
+                if (!settings.CaptureEnabled && !settings.UnsafeGuardEnabled && !testMode) return;
 
                 var frame = SsmsBridge.GetActiveDocumentFrame();
                 var editor = SsmsBridge.GetEditorControl(frame);
@@ -84,7 +102,18 @@ namespace SqlTools.Ssms.History
                 var text = GetTextToExecute();
                 if (string.IsNullOrWhiteSpace(text)) return;
 
-                if (settings.UnsafeGuardEnabled)
+                if (testMode)
+                {
+                    // no modo de teste tudo é desfeito: não precisa do alerta de DELETE/UPDATE sem WHERE
+                    var error = TestModeController.Prepare(view);
+                    if (error != null)
+                    {
+                        cancelDefault = true;
+                        WarnTestMode(error);
+                        return;
+                    }
+                }
+                else if (settings.UnsafeGuardEnabled)
                 {
                     var issues = UnsafeStatements.Find(text);
                     if (issues.Count > 0 && !ConfirmUnsafe(issues))
@@ -113,13 +142,20 @@ namespace SqlTools.Ssms.History
                 if (results != null && EnsureHooked(results))
                 {
                     _pending.Remove(results);
-                    _pending.Add(results, new Pending { Id = entry.Id, Clock = Stopwatch.StartNew(), Editor = editor, Database = entry.Database });
+                    _pending.Add(results, new Pending { Id = entry.Id, Clock = Stopwatch.StartNew(), Editor = editor, Database = entry.Database, TestMode = testMode });
                 }
                 ExecutionRecorded?.Invoke(this, entry);
             }
             catch (Exception ex)
             {
                 Log.Error("Falha ao registrar execução no histórico.", ex);
+                if (testMode && TestModeController.HasPendingRestore)
+                {
+                    // não executa sem o ROLLBACK garantido
+                    cancelDefault = true;
+                    TestModeController.Restore();
+                    WarnTestMode("Falha ao preparar o modo de teste; a execução foi cancelada. Detalhes no log.");
+                }
             }
         }
 
@@ -138,6 +174,15 @@ namespace SqlTools.Ssms.History
             p.Clock.Stop();
 
             var status = MapStatus(result);
+            if (p.TestMode)
+                ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    if (TestModeController.HasPendingRestore) TestModeController.Restore();
+                    if (status == ExecutionStatus.Cancelled)
+                        WarnTestMode("Execução cancelada no modo de teste: o ROLLBACK pode não ter rodado e a transação pode ter ficado aberta nesta aba." +
+                                     Environment.NewLine + Environment.NewLine + "Execute ROLLBACK nesta aba antes de continuar.");
+                }).FileAndForget(ProductInfo.Name + "/TestMode");
             var rows = SsmsBridge.GetRowsAffected(results);
             string db = null;
             if (string.IsNullOrEmpty(p.Database))
@@ -155,6 +200,14 @@ namespace SqlTools.Ssms.History
             {
                 Log.Error("Falha ao gravar fim da execução " + p.Id, ex);
             }
+        }
+
+        private void WarnTestMode(string message)
+        {
+            LastTestModeWarning = message;
+            Log.Info("Modo de teste: " + message.Replace(Environment.NewLine, " "));
+            try { Warn?.Invoke(message); }
+            catch (Exception ex) { Log.Warn("Falha ao avisar do modo de teste.", ex); }
         }
 
         internal static ExecutionStatus MapStatus(string result)

@@ -23,6 +23,13 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 
 Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.
 
+## Modo de teste (v0.7)
+
+- `Ctrl+Q, Ctrl+R` (ou *QueryPilot › Modo de teste*) liga/desliga o modo de teste **na aba atual**; uma faixa laranja no canto do editor mostra que está ligado.
+- Com o modo ligado, o que você executar (F5, o documento ou a seleção) roda dentro de `BEGIN TRAN` e é desfeito no fim com `ROLLBACK`: dá para ver as linhas afetadas, os resultados e os erros de um `UPDATE`/`DELETE`/`INSERT` (e até de `CREATE PROCEDURE`) sem gravar nada. O texto do editor não muda (o `BEGIN TRAN` entra na mesma linha, então os números de linha dos erros continuam certos).
+- No modo de teste o alerta de DELETE/UPDATE sem WHERE não aparece (nada é gravado). Texto com `COMMIT` ou `ROLLBACK` próprio é recusado, porque o modo não teria como garantir o desfazer.
+- Se você cancelar a execução no meio, o ROLLBACK pode não rodar: o QueryPilot avisa para executar `ROLLBACK` na aba. Comandos que não rodam em transação (ex.: `ALTER DATABASE`, `BACKUP`) dão erro e não fazem nada.
+
 ## F12 e dica no mouse (v0.6)
 
 - **F12** no nome de uma tabela, view, procedure ou função — ou num alias/coluna dela — abre a definição numa aba nova, conectada ao mesmo servidor e banco:

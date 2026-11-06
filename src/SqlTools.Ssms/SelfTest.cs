@@ -358,12 +358,15 @@ namespace SqlTools.Ssms
             var tp = view.TextSnapshot.CreateTrackingPoint(17, Microsoft.VisualStudio.Text.PointTrackingMode.Positive);
             view.VisualElement.Focus();
             Microsoft.VisualStudio.Language.Intellisense.IAsyncQuickInfoSession session = null;
-            try { session = await broker.TriggerQuickInfoAsync(view, tp, Microsoft.VisualStudio.Language.Intellisense.QuickInfoSessionOptions.None); }
-            catch (Exception ex) { Log.Warn("TriggerQuickInfoAsync falhou.", ex); }
-            // o Trigger pode devolver null antes das fontes terminarem; a sessão fica no broker
-            await Task.Delay(1500);
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            session = session ?? broker.GetSession(view);
+            for (int attempt = 0; attempt < 3 && session == null; attempt++)
+            {
+                try { session = await broker.TriggerQuickInfoAsync(view, tp, Microsoft.VisualStudio.Language.Intellisense.QuickInfoSessionOptions.None); }
+                catch (Exception ex) { Log.Warn("TriggerQuickInfoAsync falhou.", ex); }
+                // o Trigger pode devolver null antes das fontes terminarem; a sessão fica no broker
+                await Task.Delay(1500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                session = session ?? broker.GetSession(view);
+            }
             var content = session == null ? "(sem sessão)" : session.State + ": " + string.Join(" | ", session.Content.Select(x => x?.GetType().Name + "=" + x));
             check("Dica no mouse: colunas da tabela", content.Contains("dbo.Customer  (tabela)") && content.Contains("CustomerID int"), content.Replace("\r\n", "⏎"));
             if (session != null) await session.DismissAsync();
@@ -418,6 +421,8 @@ namespace SqlTools.Ssms
                 pkg.Monitor.ConfirmUnsafe = original;
             }
 
+            await TestModeChecksAsync(pkg, dte, Count, check);
+
             // aba fechada: guarda texto + conexão e reabre conectada
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             var tabText = "SELECT 'aba fechada " + Guid.NewGuid().ToString("N").Substring(0, 8) + "' AS teste";
@@ -437,6 +442,86 @@ namespace SqlTools.Ssms
             var rc = SsmsBridge.GetActiveWindowEditorConnection();
             check("Abas: Ctrl+Q, Ctrl+T reabre no mesmo banco", reopenedText == tabText && rc?.Database == CompletionDb, rc?.Database + " | " + reopenedText);
             Count("DROP TABLE dbo.GuardProbe; SELECT 0");
+        }
+
+        /// <summary>Modo de teste: executa de verdade, desfaz no fim, devolve o texto e recusa COMMIT.</summary>
+        private static async Task TestModeChecksAsync(SqlToolsPackage pkg, DTE dte, Func<string, long> count, Action<string, bool, string> check)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            count("DELETE dbo.GuardProbe; INSERT dbo.GuardProbe VALUES (1), (2); IF OBJECT_ID('dbo.TmProbe') IS NOT NULL DROP PROCEDURE dbo.TmProbe; SELECT 0");
+            var view = EditorAccess.GetActiveWpfTextView();
+            object cin = null, cout = null;
+            dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.ToggleTestMode, ref cin, ref cout);
+            await Task.Delay(300);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            check("Teste: Ctrl+Q, Ctrl+R liga e mostra a faixa", Safety.TestModeController.IsOn(view.TextBuffer) && Safety.TestModeBanner.IsShown(view), "");
+
+            var originalConfirm = pkg.Monitor.ConfirmUnsafe;
+            var originalWarn = pkg.Monitor.Warn;
+            var asked = false;
+            string warned = null;
+            pkg.Monitor.ConfirmUnsafe = issues => { asked = true; return false; };
+            pkg.Monitor.Warn = msg => warned = msg;
+            try
+            {
+                var sql = "UPDATE dbo.GuardProbe SET i = 99;\r\nINSERT dbo.GuardProbe VALUES (5)\r\nSELECT * FROM dbo.GuardProbe -- modo teste";
+                SetText(dte, sql);
+                dte.ExecuteCommand("Query.Execute");
+                var e = await WaitForAsync(pkg.History, sql);
+                await Task.Delay(500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                check("Teste: executou sem perguntar do UPDATE sem WHERE", e?.Status == ExecutionStatus.Success && !asked, e?.Status + " asked=" + asked);
+                check("Teste: alterações desfeitas", count("SELECT COUNT(*) FROM dbo.GuardProbe") == 2 && count("SELECT COUNT(*) FROM dbo.GuardProbe WHERE i = 99") == 0, "");
+                check("Teste: texto do editor restaurado", view.TextSnapshot.GetText() == sql && view.Selection.IsEmpty, view.TextSnapshot.GetText());
+                check("Teste: nenhuma transação aberta", count("SELECT COUNT(*) FROM sys.dm_tran_session_transactions st JOIN sys.dm_exec_sessions s ON s.session_id = st.session_id WHERE s.program_name LIKE '%Management Studio%' AND s.database_id = DB_ID()") == 0, "");
+
+                dte.ExecuteCommand("Edit.Undo");
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                check("Teste: Ctrl+Z não traz o BEGIN TRAN de volta", !view.TextSnapshot.GetText().Contains("BEGIN TRAN"), view.TextSnapshot.GetText());
+                SetText(dte, sql);
+
+                // só a linha selecionada, com a seleção devolvida
+                var doc =(TextDocument)dte.ActiveDocument.Object("TextDocument");
+                doc.Selection.GotoLine(2, false);
+                doc.Selection.EndOfLine(true);
+                dte.ExecuteCommand("Query.Execute");
+                var sel = await WaitForAsync(pkg.History, "INSERT dbo.GuardProbe VALUES (5)");
+                await Task.Delay(500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                check("Teste: seleção executada e desfeita", sel?.Status == ExecutionStatus.Success && count("SELECT COUNT(*) FROM dbo.GuardProbe") == 2, sel?.Status.ToString());
+                check("Teste: seleção devolvida", view.TextSnapshot.GetText() == sql && view.Selection.StreamSelectionSpan.GetText() == "INSERT dbo.GuardProbe VALUES (5)",
+                    view.Selection.StreamSelectionSpan.GetText());
+
+                // CREATE PROCEDURE precisa ser o primeiro do lote
+                var proc = "CREATE PROCEDURE dbo.TmProbe AS SELECT 1";
+                SetText(dte, proc);
+                dte.ExecuteCommand("Query.Execute");
+                var pe = await WaitForAsync(pkg.History, proc);
+                await Task.Delay(500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                check("Teste: CREATE PROCEDURE executa e é desfeito", pe?.Status == ExecutionStatus.Success && count("SELECT COUNT(*) FROM sys.procedures WHERE name = 'TmProbe'") == 0, pe?.Status.ToString());
+
+                // COMMIT: recusa
+                var commit = "BEGIN TRAN; DELETE FROM dbo.GuardProbe WHERE i > 0; COMMIT";
+                SetText(dte, commit);
+                dte.ExecuteCommand("Query.Execute");
+                await Task.Delay(1500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                check("Teste: recusa COMMIT", warned != null && warned.Contains("COMMIT") && count("SELECT COUNT(*) FROM dbo.GuardProbe") == 2 && view.TextSnapshot.GetText() == commit, warned);
+            }
+            finally
+            {
+                pkg.Monitor.ConfirmUnsafe = originalConfirm;
+                pkg.Monitor.Warn = originalWarn;
+            }
+
+            dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.ToggleTestMode, ref cin, ref cout);
+            await Task.Delay(300);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            check("Teste: desliga e tira a faixa", !Safety.TestModeController.IsOn(view.TextBuffer) && !Safety.TestModeBanner.IsShown(view), "");
+            var cmd = dte.Commands.Item(PackageGuids.CmdSet.ToString("B"), PackageIds.ToggleTestMode);
+            var binds = string.Join(" | ", ((object[])cmd.Bindings).Cast<object>());
+            check("Teste: atalho Ctrl+Q, Ctrl+R", binds.IndexOf("Ctrl+Q, Ctrl+R", StringComparison.OrdinalIgnoreCase) >= 0, binds);
         }
 
         /// <summary>Formatador pelo comando real: documento inteiro, Ctrl+Z, só a seleção e atalho.</summary>

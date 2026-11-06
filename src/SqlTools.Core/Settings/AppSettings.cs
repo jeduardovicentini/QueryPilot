@@ -29,6 +29,7 @@ namespace SqlTools.Settings
         [DataMember] public bool ReopenShortcutApplied { get; set; }
         /// <summary>Interno: o F12 (ir para a definição) já foi configurado uma vez.</summary>
         [DataMember] public bool DefinitionShortcutApplied { get; set; }
+        [DataMember] public bool TestModeShortcutApplied { get; set; }
         /// <summary>Interno: valor original do "Auto list members" nativo (-1 = não guardado).</summary>
         [DataMember] public int NativeAutoListOriginal { get; set; } = -1;
         /// <summary>Interno: o atalho do histórico já foi configurado uma vez.</summary>

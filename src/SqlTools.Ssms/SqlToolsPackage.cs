@@ -80,12 +80,20 @@ namespace SqlTools.Ssms
                     mcs.AddCommand(new MenuCommand((s, e) => ReopenClosedTab(), new CommandID(PackageGuids.CmdSet, PackageIds.ReopenClosedTab)));
                     mcs.AddCommand(new MenuCommand((s, e) => ShowHistory(closedTabs: true), new CommandID(PackageGuids.CmdSet, PackageIds.ShowClosedTabs)));
                     mcs.AddCommand(new MenuCommand((s, e) => Navigation.GoToDefinition.Execute(this), new CommandID(PackageGuids.CmdSet, PackageIds.GoToDefinition)));
+                    var testMode = new OleMenuCommand((s, e) => Safety.TestModeController.Toggle(this), new CommandID(PackageGuids.CmdSet, PackageIds.ToggleTestMode));
+                    testMode.BeforeQueryStatus += (s, e) =>
+                    {
+                        ThreadHelper.ThrowIfNotOnUIThread();
+                        testMode.Checked = Safety.TestModeController.IsOn(EditorAccess.GetActiveWpfTextView()?.TextBuffer);
+                    };
+                    mcs.AddCommand(testMode);
                 }
 
                 EnsureHistoryShortcut();
                 EnsureShortcut(PackageIds.FormatSql, "Global::Ctrl+K, Ctrl+Y", s => s.FormatShortcutApplied, s => s.FormatShortcutApplied = true);
                 EnsureShortcut(PackageIds.GoToDefinition, "Global::F12", s => s.DefinitionShortcutApplied, s => s.DefinitionShortcutApplied = true);
                 EnsureShortcut(PackageIds.ReopenClosedTab, "Global::Ctrl+Q, Ctrl+T", s => s.ReopenShortcutApplied, s => s.ReopenShortcutApplied = true);
+                EnsureShortcut(PackageIds.ToggleTestMode, "Global::Ctrl+Q, Ctrl+R", s => s.TestModeShortcutApplied, s => s.TestModeShortcutApplied = true);
                 EnsureTopMenuAllowed();
 
                 Monitor = new ExecutionMonitor(Dte, History, Settings);
@@ -335,6 +343,7 @@ namespace SqlTools.Ssms
         public const int ReopenClosedTab = 0x0105;
         public const int ShowClosedTabs = 0x0106;
         public const int GoToDefinition = 0x0107;
+        public const int ToggleTestMode = 0x0108;
         public const int TopMenu = 0x1000;
     }
 }

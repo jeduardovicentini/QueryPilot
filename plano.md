@@ -78,6 +78,15 @@ Lição: no DocumentClosing o frame já saiu da enumeração de janelas; a conex
 
 Lições: o SMO dentro do SSMS levou ~32 s por tabela (Script()); o CREATE TABLE montado do catálogo numa consulta sai na hora. O TriggerQuickInfoAsync pode devolver null antes das fontes terminarem; a sessão fica em broker.GetSession(view).
 
+## v0.7: modo de teste (entregue em 2026-11-06)
+- [x] TestMode.Wrap: `BEGIN TRAN; ` na mesma linha (ou em lote próprio antes de CREATE/ALTER) + lote final `IF @@TRANCOUNT > 0 ROLLBACK`
+- [x] Por aba (propriedade do ITextBuffer), Ctrl+Q, Ctrl+R, faixa no editor (adornment)
+- [x] BeforeExecute envolve e seleciona o texto; AfterExecute desfaz pelo undo do editor (Ctrl+Z não traz o wrapper de volta)
+- [x] Recusa COMMIT/ROLLBACK no texto; aviso se a execução for cancelada no meio
+- [x] Self-test: UPDATE/INSERT desfeitos, texto e seleção restaurados, CREATE PROCEDURE desfeito, COMMIT recusado (65 checks)
+
+Lição: o SSMS lê o texto a executar dentro do próprio comando Query.Execute, então dá para alterar o buffer no BeforeExecute e restaurar no AfterExecute.
+
 ## Depois
 - Autocomplete: cross-database (`banco.schema.`), snippets do usuário (arquivo), colunas de funções de tabela com parâmetros
 - Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, schema compare (DacFx)
