@@ -94,6 +94,14 @@
           <LocCanonicalName>.$ProductName$.EditSnippets</LocCanonicalName>
         </Strings>
       </Button>
+      <Button guid="guidCmdSet" id="cmdShowSnippets" priority="0x0191" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Strings>
+          <ButtonText>Snippets disponíveis...</ButtonText>
+          <CanonicalName>.$ProductName$.ShowSnippets</CanonicalName>
+          <LocCanonicalName>.$ProductName$.ShowSnippets</LocCanonicalName>
+        </Strings>
+      </Button>
       <Button guid="guidCmdSet" id="cmdRefreshMetadata" priority="0x0200" type="Button">
         <Parent guid="guidCmdSet" id="MainGroup" />
         <Icon guid="ImageCatalogGuid" id="Refresh" />
@@ -159,6 +167,7 @@
       <IDSymbol name="cmdGoToDefinition" value="0x0107" />
       <IDSymbol name="cmdToggleTestMode" value="0x0108" />
       <IDSymbol name="cmdEditSnippets" value="0x0109" />
+      <IDSymbol name="cmdShowSnippets" value="0x010A" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

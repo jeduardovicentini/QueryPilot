@@ -68,6 +68,27 @@ namespace SqlTools.Core.Tests
         }
 
         [Fact]
+        public void Lista_tem_todos_e_cada_bloco_pode_ser_copiado()
+        {
+            var user = SqlSnippets.Parse("--#ssf Meu ssf\r\nSELECT TOP 10 * FROM $CURSOR$");
+            var catalog = SqlSnippets.Catalog(user, @"C:\x\snippets.sql");
+            var errors = new List<string>();
+            var parsed = SqlSnippets.Parse(catalog, errors);
+            Assert.Contains(@"C:\x\snippets.sql", catalog);
+            Assert.Contains("(substituído pelo seu)", catalog);
+            // o ssf aparece duas vezes (o seu e o embutido); os demais, uma
+            Assert.Single(errors);
+            foreach (var b in SqlSnippets.BuiltIn.Where(x => x.Shortcut != "ssf"))
+            {
+                var p = parsed.Single(x => x.Shortcut == b.Shortcut);
+                Assert.Equal(b.Text, p.Text);
+                Assert.Equal(b.CursorOffset, p.CursorOffset);
+            }
+            Assert.True(catalog.IndexOf("--#ssf Meu ssf") < catalog.IndexOf("--#st "));
+            Assert.True(catalog.IndexOf("--#btc ") < catalog.IndexOf("--#ij "));
+        }
+
+        [Fact]
         public void Expand_indenta_as_linhas_seguintes_e_posiciona_o_cursor()
         {
             var sn = SqlSnippets.BuiltIn.First(s => s.Shortcut == "btc");

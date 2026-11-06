@@ -9,7 +9,7 @@
     <ProductName>QueryPilot</ProductName>
     <ProductPublisher>QueryPilot</ProductPublisher>
     <ProductDescription>Autocomplete com JOIN por FK, histórico de queries e cor de abas por servidor para o SQL Server Management Studio 22.</ProductDescription>
-    <ProductVersion>0.8.0</ProductVersion>
+    <ProductVersion>0.8.1</ProductVersion>
 
     <ProductId>SqlTools.Ssms.6b1f4c2e-9d3a-4f7b-8e21-5a7c0d9e4b13</ProductId>
     <DataFolderName>QueryPilot</DataFolderName>

@@ -572,6 +572,21 @@ namespace SqlTools.Ssms
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             check("Snippets: exemplos do arquivo novo no autocomplete", Completion.UserSnippetStore.Current.Count == 2 && Completion.UserSnippetStore.LastErrors.Count == 0,
                 string.Join(",", Completion.UserSnippetStore.Current.Select(x => x.Shortcut)));
+
+            // lista de todos (duas vezes: a segunda regrava com a aba ainda aberta)
+            for (int i = 0; i < 2; i++)
+            {
+                dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.ShowSnippets, ref cin, ref cout);
+                await Task.Delay(1500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            }
+            var list = dte.ActiveDocument;
+            var listText = list?.Object("TextDocument") is TextDocument td ? td.StartPoint.CreateEditPoint().GetText(td.EndPoint) : "";
+            check("Snippets: lista com os seus e os embutidos", list != null && list.FullName.EndsWith("snippets-disponiveis.sql", StringComparison.OrdinalIgnoreCase) &&
+                listText.Contains("--#sel5") && listText.Contains("--#ssf") && listText.Contains("--#btc") && listText.Contains("$CURSOR$"), list?.FullName);
+            if (list != null && list.FullName.EndsWith("snippets-disponiveis.sql", StringComparison.OrdinalIgnoreCase)) list.Close(vsSaveChanges.vsSaveChangesNo);
+            await Task.Delay(500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
         }
 
         /// <summary>Formatador pelo comando real: documento inteiro, Ctrl+Z, só a seleção e atalho.</summary>

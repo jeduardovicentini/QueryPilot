@@ -88,6 +88,7 @@ namespace SqlTools.Ssms
                     };
                     mcs.AddCommand(testMode);
                     mcs.AddCommand(new MenuCommand((s, e) => EditSnippets(), new CommandID(PackageGuids.CmdSet, PackageIds.EditSnippets)));
+                    mcs.AddCommand(new MenuCommand((s, e) => ShowSnippets(), new CommandID(PackageGuids.CmdSet, PackageIds.ShowSnippets)));
                 }
 
                 EnsureHistoryShortcut();
@@ -203,6 +204,26 @@ namespace SqlTools.Ssms
             catch (Exception ex)
             {
                 Log.Error("Falha ao abrir o arquivo de snippets.", ex);
+            }
+        }
+
+        /// <summary>Lista gerada de todos os snippets (seus e embutidos), no formato do snippets.sql.</summary>
+        internal void ShowSnippets()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var path = System.IO.Path.Combine(AppPaths.Root, "snippets-disponiveis.sql");
+                // aberto de uma vez anterior: fecha antes de regravar (senão o SSMS pergunta se recarrega)
+                foreach (Document d in Dte.Documents)
+                    if (string.Equals(d.FullName, path, StringComparison.OrdinalIgnoreCase)) { d.Close(vsSaveChanges.vsSaveChangesNo); break; }
+                var text = Sql.SqlSnippets.Catalog(Completion.UserSnippetStore.Current, Completion.UserSnippetStore.FilePath);
+                System.IO.File.WriteAllText(path, text, new System.Text.UTF8Encoding(true));
+                Dte.ItemOperations.OpenFile(path);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Falha ao abrir a lista de snippets.", ex);
             }
         }
 
@@ -362,6 +383,7 @@ namespace SqlTools.Ssms
         public const int GoToDefinition = 0x0107;
         public const int ToggleTestMode = 0x0108;
         public const int EditSnippets = 0x0109;
+        public const int ShowSnippets = 0x010A;
         public const int TopMenu = 0x1000;
     }
 }

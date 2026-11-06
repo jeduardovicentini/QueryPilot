@@ -73,6 +73,7 @@ namespace SqlTools.Sql
         }
 
         private static readonly Regex Header = new Regex(@"^\s*--#(\S*)[ \t]*(.*)$", RegexOptions.Compiled);
+        private static readonly Regex Separator = new Regex(@"^\s*--\s*=====", RegexOptions.Compiled);
         private static readonly Regex ValidShortcut = new Regex(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
         /// <summary>
@@ -118,7 +119,8 @@ namespace SqlTools.Sql
             for (int i = 0; i < lines.Length; i++)
             {
                 var m = Header.Match(lines[i]);
-                if (m.Success)
+                if (Separator.IsMatch(lines[i])) Flush(); // "-- ===== título" encerra o snippet
+                else if (m.Success)
                 {
                     Flush();
                     shortcut = m.Groups[1].Value;
@@ -144,6 +146,42 @@ namespace SqlTools.Sql
             var names = new HashSet<string>(list.Select(x => x.Shortcut), StringComparer.OrdinalIgnoreCase);
             list.AddRange(BuiltIn.Where(b => !names.Contains(b.Shortcut)));
             return list;
+        }
+
+        /// <summary>
+        /// Lista de todos os snippets (os do usuário e os embutidos), no mesmo formato do snippets.sql: um bloco
+        /// pode ser copiado para o arquivo do usuário e alterado lá.
+        /// </summary>
+        public static string Catalog(IReadOnlyList<SqlSnippet> user, string userFile)
+        {
+            user = user ?? new List<SqlSnippet>();
+            var replaced = new HashSet<string>(user.Select(x => x.Shortcut), StringComparer.OrdinalIgnoreCase);
+            var sb = new StringBuilder();
+            sb.Append("-- QueryPilot: snippets disponíveis. Digite o atalho e aperte Tab.\r\n");
+            sb.Append("-- Esta lista é gerada a cada abertura: mudanças aqui não valem.\r\n");
+            sb.Append("-- Para criar um snippet ou mudar um embutido: QueryPilot › Editar snippets..., copie o bloco (--#atalho e o texto)\r\n");
+            sb.Append("-- para lá, altere e salve. $CURSOR$ marca onde o cursor fica.\r\n");
+            if (!string.IsNullOrEmpty(userFile)) sb.Append("-- Seu arquivo: ").Append(userFile).Append("\r\n");
+
+            void Section(string title, IEnumerable<SqlSnippet> items)
+            {
+                var list = items.ToList();
+                if (list.Count == 0) return;
+                sb.Append("\r\n-- ===== ").Append(title).Append(" =====\r\n");
+                foreach (var s in list)
+                {
+                    var desc = s.Description;
+                    if (!s.IsUser && replaced.Contains(s.Shortcut)) desc += "   (substituído pelo seu)";
+                    sb.Append("\r\n--#").Append(s.Shortcut).Append(' ').Append(desc).Append("\r\n");
+                    var text = s.CursorOffset == null ? s.Text : s.Text.Insert(s.CursorOffset.Value, CursorMarker);
+                    sb.Append(text).Append("\r\n");
+                }
+            }
+
+            Section("Seus snippets (em qualquer lugar)", user);
+            Section("Embutidos: no começo de uma instrução", BuiltIn.Where(x => !x.InStatement));
+            Section("Embutidos: também no meio da instrução", BuiltIn.Where(x => x.InStatement));
+            return sb.ToString();
         }
 
         /// <summary>
@@ -175,6 +213,7 @@ namespace SqlTools.Sql
             "-- Cada snippet começa com uma linha:   --#atalho  descrição (opcional)\r\n" +
             "-- O texto vai até o próximo --#. $CURSOR$ marca onde o cursor fica depois do Tab.\r\n" +
             "-- Um atalho igual a um embutido (ex.: ssf) substitui o embutido.\r\n" +
+            "-- Todos os snippets, inclusive os embutidos: QueryPilot › Snippets disponíveis...\r\n" +
             "\r\n" +
             "--#sel5 Primeiras 5 linhas sem bloquear\r\n" +
             "SELECT TOP 5 *\r\n" +
