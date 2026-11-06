@@ -32,6 +32,15 @@ namespace SqlTools.Completion
         public override string ToString() => Kind + ":" + DisplayText;
     }
 
+    public sealed class TextEdit
+    {
+        public int Start { get; set; }
+        public int Length { get; set; }
+        public string Text { get; set; }
+        /// <summary>A edição principal (o * virou a lista de colunas).</summary>
+        public bool IsColumns { get; set; }
+    }
+
     public sealed class CompletionOptions
     {
         /// <summary>Ao escolher uma tabela no FROM/JOIN, insere também um alias curto.</summary>
@@ -472,6 +481,72 @@ namespace SqlTools.Completion
             if (!inParens) return;
             foreach (var c in cols)
                 list.Add(new Suggestion { DisplayText = c.Name, InsertText = Quote(c.Name), Kind = SuggestionKind.Column, Priority = c.Insertable ? 10 : 20, Detail = c.DataType, Description = c.DataType + (c.Insertable ? "" : " (não aceita valor)") });
+        }
+
+        /// <summary>
+        /// Tab no *: troca o * (ou alias.*) sob o cursor — logo antes ou logo depois dele — pelas colunas qualificadas
+        /// com o alias, e cria o alias nas tabelas que não têm. Devolve as edições do fim para o começo, ou null.
+        /// </summary>
+        public static List<TextEdit> ExpandStar(string text, int caret, DatabaseMetadata md)
+        {
+            if (string.IsNullOrEmpty(text) || md == null || caret < 0 || caret > text.Length) return null;
+            int after;
+            if (caret < text.Length && text[caret] == '*') after = caret + 1;
+            else if (caret > 0 && text[caret - 1] == '*') after = caret;
+            else return null;
+
+            var ctx = SqlContextAnalyzer.Analyze(text, after);
+            if (ctx.Kind != ContextKind.StarExpansion) return null;
+            var scope = Resolve(ctx, md);
+            var tables = (ctx.StarQualifier != null
+                ? scope.Where(t => Eq(t.RefName, ctx.StarQualifier) || Eq(t.Ref.Name, ctx.StarQualifier)).Take(1)
+                : scope).Where(t => t.Columns.Count > 0).ToList();
+            if (tables.Count == 0) return null;
+
+            var edits = new List<TextEdit>();
+            var used = UsedAliases(ctx);
+            var cols = new List<string>();
+            List<SqlToken> stmt = null;
+            foreach (var t in tables)
+            {
+                var alias = t.Ref.Alias;
+                if (string.IsNullOrEmpty(alias))
+                {
+                    alias = AliasGenerator.For(t.Ref.Name, used);
+                    used.Add(alias);
+                    edits.Add(new TextEdit { Start = t.Ref.NameEnd, Length = 0, Text = " " + alias });
+                    // com alias, "Tabela.coluna" deixa de valer: troca por "alias.coluna" na mesma instrução
+                    stmt = stmt ?? StatementTokens(text, ctx.StarStart);
+                    for (int i = 0; i + 1 < stmt.Count; i++)
+                    {
+                        var k = stmt[i];
+                        if (!k.IsName || !Eq(k.Value, t.Ref.Name) || stmt[i + 1].Kind != TokenKind.Dot) continue;
+                        if (k.Start >= ctx.StarStart && k.Start < ctx.StarStart + ctx.StarLength) continue;
+                        if (i + 2 < stmt.Count && stmt[i + 2].IsName && i + 3 < stmt.Count && stmt[i + 3].Kind == TokenKind.Dot) continue; // é schema
+                        int from = k.Start;
+                        if (i > 0 && stmt[i - 1].Kind == TokenKind.Dot)
+                        {
+                            // schema.Tabela.coluna → alias.coluna
+                            if (i < 2 || !stmt[i - 2].IsName || (i >= 3 && stmt[i - 3].Kind == TokenKind.Dot)) continue;
+                            from = stmt[i - 2].Start;
+                        }
+                        edits.Add(new TextEdit { Start = from, Length = k.End - from, Text = alias });
+                    }
+                }
+                cols.AddRange(t.Columns.Select(c => Quote(alias) + "." + Quote(c.Name)));
+            }
+            edits.Add(new TextEdit { Start = ctx.StarStart, Length = ctx.StarLength, Text = string.Join(", ", cols), IsColumns = true });
+            return edits.OrderByDescending(e => e.Start).ToList();
+        }
+
+        /// <summary>Tokens (sem comentários) da instrução que contém <paramref name="pos"/>.</summary>
+        private static List<SqlToken> StatementTokens(string text, int pos)
+        {
+            var t = SqlTokenizer.Tokenize(text).Where(x => x.Kind != TokenKind.Comment).ToList();
+            var starts = SqlContextAnalyzer.SegmentStatements(t);
+            int at = t.FindIndex(x => x.End > pos);
+            if (at < 0) return new List<SqlToken>();
+            return t.Where((x, i) => starts[i] == starts[at]).ToList();
         }
 
         private static void AddStarExpansion(List<Suggestion> list, SqlCompletionContext ctx, List<ResolvedTable> scope)

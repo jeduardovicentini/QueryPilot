@@ -43,6 +43,8 @@ namespace SqlTools.Completion
         public List<string> Parts { get; } = new List<string>();
         public string Alias { get; set; }
         public int Position { get; set; }
+        /// <summary>Fim do nome (ou da subconsulta), onde um alias pode ser inserido.</summary>
+        public int NameEnd { get; set; }
         /// <summary>Subconsulta, CTE ou variável de tabela: as colunas vêm de <see cref="DerivedColumns"/>.</summary>
         public bool IsDerived { get; set; }
         public List<string> DerivedColumns { get; } = new List<string>();
@@ -413,6 +415,7 @@ namespace SqlTools.Completion
                     j = close < 0 ? t.Count : close + 1;
                 }
             }
+            r.NameEnd = t[Math.Min(j, t.Count) - 1].End;
 
             if (j < t.Count && t[j].Is("AS")) j++;
             if (j < t.Count && t[j].IsName && t[j] != word && !(t[j].Kind == TokenKind.Identifier && SqlKeywords.Reserved.Contains(t[j].Text)))

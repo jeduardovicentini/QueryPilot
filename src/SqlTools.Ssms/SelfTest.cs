@@ -269,6 +269,15 @@ namespace SqlTools.Ssms
             var snip = view.TextSnapshot.GetText();
             check("Completion: snippet ssf + Tab", snip == "SELECT * FROM", snip);
 
+            // Tab com o cursor no *: expande as colunas e cria o alias
+            SetText(dte, "SELECT * FROM Customer");
+            view.Caret.MoveTo(new Microsoft.VisualStudio.Text.SnapshotPoint(view.TextSnapshot, 7));
+            await EditorAccess.SendTabAsync(view);
+            await Task.Delay(500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var expanded = view.TextSnapshot.GetText();
+            check("Completion: Tab no * expande com alias", expanded == "SELECT c.CustomerID, c.Name, c.Email FROM Customer c", expanded);
+
             // recarga a quente (Atualizar metadados)
             var c2 = SsmsBridge.GetActiveWindowEditorConnection();
             Completion.MetadataService.Instance.Invalidate(c2);

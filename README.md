@@ -11,7 +11,7 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 - **Condição do ON:** `JOIN Customer c ON ␣` → `c.CustomerID = o.CustomerID`.
 - **Colunas no escopo:** no SELECT, WHERE, ORDER BY etc., as colunas das tabelas do FROM (mesmo o FROM vindo depois do cursor). Nome repetido em duas tabelas aparece como `c.Id` / `o.Id`.
 - **`alias.`** lista as colunas; **`schema.`** lista os objetos; **`sys.`** as views de sistema.
-- **Expandir `*`:** cursor depois de `*` (ou `o.*`) + `Ctrl+Espaço` → lista de colunas.
+- **Expandir `*` com Tab:** cursor no `*` (antes ou depois) + `Tab` → `SELECT * FROM oCarrinho` vira `SELECT oc.Col1, oc.Col2, ... FROM oCarrinho oc`. Se a tabela não tem alias, ele é criado (e `oCarrinho.col` na mesma instrução vira `oc.col`); `o.*` expande só aquela tabela. `Ctrl+Espaço` no `*` continua mostrando o item na lista.
 - **INSERT:** `INSERT INTO t ␣` sugere `(col1, col2, ...)` sem identity, calculadas e rowversion.
 - **EXEC** sugere procedures (com parâmetros na descrição); **USE**, bancos; **@**, variáveis do batch.
 - CTEs e subconsultas expõem as colunas do SELECT delas.
