@@ -39,6 +39,9 @@ namespace SqlTools.Completion
         public string Text { get; set; }
         /// <summary>A edição principal (o * virou a lista de colunas).</summary>
         public bool IsColumns { get; set; }
+        /// <summary>Trecho a selecionar depois de aplicar, relativo a <see cref="Start"/> (-1 = nenhum).</summary>
+        public int SelectOffset { get; set; } = -1;
+        public int SelectLength { get; set; }
     }
 
     public sealed class CompletionOptions
@@ -538,6 +541,68 @@ namespace SqlTools.Completion
             edits.Add(new TextEdit { Start = ctx.StarStart, Length = ctx.StarLength, Text = string.Join(", ", cols), IsColumns = true });
             return edits.OrderByDescending(e => e.Start).ToList();
         }
+
+        /// <summary>
+        /// Tab no fim de "INSERT [INTO] tabela": troca pelo INSERT completo no layout do "Script as INSERT" do SSMS,
+        /// com as colunas que aceitam valor e um marcador &lt;Coluna&gt; para cada valor. O primeiro marcador fica selecionado.
+        /// </summary>
+        public static TextEdit ExpandInsert(string text, int caret, DatabaseMetadata md)
+        {
+            if (string.IsNullOrEmpty(text) || md == null || caret <= 0 || caret > text.Length) return null;
+            // depois do cursor, só espaço até o fim da linha
+            for (int p = caret; p < text.Length && text[p] != '\n' && text[p] != '\r'; p++)
+                if (!char.IsWhiteSpace(text[p])) return null;
+
+            var t = SqlTokenizer.Tokenize(text.Substring(0, caret)).Where(x => x.Kind != TokenKind.Comment).ToList();
+            if (t.Count < 2 || !t[t.Count - 1].IsName) return null;
+            for (int p = t[t.Count - 1].End; p < caret; p++) if (text[p] != ' ' && text[p] != '\t') return null;
+
+            // nome com pontos, do fim para o começo
+            int i = t.Count - 1;
+            var parts = new List<string> { t[i].Value };
+            while (i >= 2 && t[i - 1].Kind == TokenKind.Dot && t[i - 2].IsName) { parts.Insert(0, t[i - 2].Value); i -= 2; }
+            int kw = i - 1;
+            if (kw >= 0 && t[kw].Is("INTO")) kw--;
+            if (kw < 0 || !t[kw].Is("INSERT")) return null;
+            if (kw > 0 && (t[kw - 1].Kind == TokenKind.Comma || t[kw - 1].Is("THEN", "FOR", "AFTER", "OF", "ON"))) return null;
+
+            var name = parts[parts.Count - 1];
+            var schema = parts.Count >= 2 ? parts[parts.Count - 2] : null;
+            var obj = md.Find(schema, name);
+            if (obj == null || !(obj.Kind == DbObjectKind.Table || obj.Kind == DbObjectKind.View)) return null;
+            var cols = obj.Columns.Where(c => c.Insertable).OrderBy(c => c.Ordinal).ToList();
+            if (cols.Count == 0) return null;
+
+            int start = t[kw].Start;
+            int lineStart = text.LastIndexOf('\n', Math.Max(0, start - 1)) + 1;
+            var lead = text.Substring(lineStart, start - lineStart);
+            var b = lead.Trim().Length == 0 ? lead : "";
+            var nl = text.Contains("\r\n") || !text.Contains("\n") ? "\r\n" : "\n";
+            var pad = b + new string(' ', 11);
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("INSERT INTO ").Append(Bracket(obj.Schema)).Append('.').Append(Bracket(obj.Name));
+            for (int c = 0; c < cols.Count; c++)
+                sb.Append(nl).Append(pad).Append(c == 0 ? "(" : ",").Append(Bracket(cols[c].Name)).Append(c == cols.Count - 1 ? ")" : "");
+            sb.Append(nl).Append(b).Append("     VALUES");
+            int select = -1;
+            for (int c = 0; c < cols.Count; c++)
+            {
+                sb.Append(nl).Append(pad).Append(c == 0 ? "(" : ",");
+                if (c == 0) select = sb.Length;
+                sb.Append('<').Append(cols[c].Name).Append('>').Append(c == cols.Count - 1 ? ")" : "");
+            }
+            return new TextEdit
+            {
+                Start = start,
+                Length = caret - start,
+                Text = sb.ToString(),
+                SelectOffset = select,
+                SelectLength = cols[0].Name.Length + 2
+            };
+        }
+
+        private static string Bracket(string name) => "[" + name.Replace("]", "]]") + "]";
 
         /// <summary>Tokens (sem comentários) da instrução que contém <paramref name="pos"/>.</summary>
         private static List<SqlToken> StatementTokens(string text, int pos)

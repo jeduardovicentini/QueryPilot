@@ -278,6 +278,17 @@ namespace SqlTools.Ssms
             var expanded = view.TextSnapshot.GetText();
             check("Completion: Tab no * expande com alias", expanded == "SELECT c.CustomerID, c.Name, c.Email FROM Customer c", expanded);
 
+            // INSERT INTO tabela + Tab (digitado: a lista está aberta com o nome inteiro)
+            SetText(dte, "");
+            await EditorAccess.TypeAsync(view, "INSERT INTO Customer");
+            await EditorAccess.SendTabAsync(view);
+            await Task.Delay(500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var ins = view.TextSnapshot.GetText().Replace("\r\n", "\n");
+            var insExpected = "INSERT INTO [dbo].[Customer]\n           ([Name]\n           ,[Email])\n     VALUES\n           (<Name>\n           ,<Email>)";
+            check("Completion: INSERT INTO tabela + Tab gera o INSERT", ins == insExpected, ins.Replace("\n", "⏎"));
+            check("Completion: primeiro valor selecionado", view.Selection.SelectedSpans.FirstOrDefault().GetText() == "<Name>", view.Selection.SelectedSpans.FirstOrDefault().GetText());
+
             // recarga a quente (Atualizar metadados)
             var c2 = SsmsBridge.GetActiveWindowEditorConnection();
             Completion.MetadataService.Instance.Invalidate(c2);

@@ -12,6 +12,7 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 - **Colunas no escopo:** no SELECT, WHERE, ORDER BY etc., as colunas das tabelas do FROM (mesmo o FROM vindo depois do cursor). Nome repetido em duas tabelas aparece como `c.Id` / `o.Id`.
 - **`alias.`** lista as colunas; **`schema.`** lista os objetos; **`sys.`** as views de sistema.
 - **Expandir `*` com Tab:** cursor no `*` (antes ou depois) + `Tab` → `SELECT * FROM oCarrinho` vira `SELECT oc.Col1, oc.Col2, ... FROM oCarrinho oc`. Se a tabela não tem alias, ele é criado (e `oCarrinho.col` na mesma instrução vira `oc.col`); `o.*` expande só aquela tabela. `Ctrl+Espaço` no `*` continua mostrando o item na lista.
+- **INSERT completo com Tab:** `INSERT INTO oCarrinho` + `Tab` no fim gera o INSERT no layout do "Script as INSERT" do SSMS — colunas que aceitam valor (sem identity, calculadas e rowversion) e um `<Coluna>` para cada valor, com o primeiro já selecionado.
 - **INSERT:** `INSERT INTO t ␣` sugere `(col1, col2, ...)` sem identity, calculadas e rowversion.
 - **EXEC** sugere procedures (com parâmetros na descrição); **USE**, bancos; **@**, variáveis do batch.
 - CTEs e subconsultas expõem as colunas do SELECT delas.
