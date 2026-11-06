@@ -79,10 +79,12 @@ namespace SqlTools.Ssms
                     mcs.AddCommand(new MenuCommand((s, e) => FormatSql(), new CommandID(PackageGuids.CmdSet, PackageIds.FormatSql)));
                     mcs.AddCommand(new MenuCommand((s, e) => ReopenClosedTab(), new CommandID(PackageGuids.CmdSet, PackageIds.ReopenClosedTab)));
                     mcs.AddCommand(new MenuCommand((s, e) => ShowHistory(closedTabs: true), new CommandID(PackageGuids.CmdSet, PackageIds.ShowClosedTabs)));
+                    mcs.AddCommand(new MenuCommand((s, e) => Navigation.GoToDefinition.Execute(this), new CommandID(PackageGuids.CmdSet, PackageIds.GoToDefinition)));
                 }
 
                 EnsureHistoryShortcut();
                 EnsureShortcut(PackageIds.FormatSql, "Global::Ctrl+K, Ctrl+Y", s => s.FormatShortcutApplied, s => s.FormatShortcutApplied = true);
+                EnsureShortcut(PackageIds.GoToDefinition, "Global::F12", s => s.DefinitionShortcutApplied, s => s.DefinitionShortcutApplied = true);
                 EnsureShortcut(PackageIds.ReopenClosedTab, "Global::Ctrl+Q, Ctrl+T", s => s.ReopenShortcutApplied, s => s.ReopenShortcutApplied = true);
                 EnsureTopMenuAllowed();
 
@@ -332,6 +334,7 @@ namespace SqlTools.Ssms
         public const int FormatSql = 0x0104;
         public const int ReopenClosedTab = 0x0105;
         public const int ShowClosedTabs = 0x0106;
+        public const int GoToDefinition = 0x0107;
         public const int TopMenu = 0x1000;
     }
 }

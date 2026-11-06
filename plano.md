@@ -70,6 +70,14 @@ Lições: caixa só em palavras reservadas (ou contexto certo: `FETCH NEXT`, `OU
 
 Lição: no DocumentClosing o frame já saiu da enumeração de janelas; a conexão é lembrada antes (OnActiveFrameChanged + depois de executar) e, se a janela que fecha ainda é a ativa, lida na hora.
 
+## v0.6: F12 e dica no mouse (entregue em 2026-11-06)
+- [x] SymbolResolver: objeto/coluna sob o cursor (nome, schema.nome, alias, alias.coluna, coluna sem qualificador)
+- [x] F12 = comando próprio (o SSMS não tem Edit.GoToDefinition): tabela pelo catálogo, módulos por OBJECT_DEFINITION → ALTER
+- [x] Quick info assíncrono (IAsyncQuickInfoSource) com colunas/parâmetros
+- [x] Self-test: F12 em tabela, alias.coluna e procedure; tooltip visível (53 checks)
+
+Lições: o SMO dentro do SSMS levou ~32 s por tabela (Script()); o CREATE TABLE montado do catálogo numa consulta sai na hora. O TriggerQuickInfoAsync pode devolver null antes das fontes terminarem; a sessão fica em broker.GetSession(view).
+
 ## Depois
 - Autocomplete: cross-database (`banco.schema.`), snippets do usuário (arquivo), colunas de funções de tabela com parâmetros
 - Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, schema compare (DacFx)

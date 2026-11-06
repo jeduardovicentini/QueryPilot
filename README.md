@@ -23,6 +23,13 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 
 Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.
 
+## F12 e dica no mouse (v0.6)
+
+- **F12** no nome de uma tabela, view, procedure ou função — ou num alias/coluna dela — abre a definição numa aba nova, conectada ao mesmo servidor e banco:
+  - **tabela:** `CREATE TABLE` com colunas (tipo, identity, calculadas, defaults), PK/UNIQUE, CHECK, FKs (com ON DELETE/UPDATE) e índices (INCLUDE, filtro);
+  - **procedure/view/função/gatilho:** o código como `ALTER`, igual ao "Modify" do SSMS (com `SET ANSI_NULLS`/`QUOTED_IDENTIFIER` do objeto).
+- **Mouse parado** sobre uma tabela mostra as colunas com tipo, PK e identity; sobre uma procedure, os parâmetros; sobre `alias.coluna`, o tipo da coluna.
+
 ## Proteção e abas fechadas (v0.5)
 
 - **DELETE/UPDATE sem WHERE:** ao executar (F5), se o trecho tiver `DELETE` ou `UPDATE` sem `WHERE`, ou `TRUNCATE TABLE`, o QueryPilot lista as instruções (com a linha) e pergunta antes; "Não" cancela a execução. Não alerta para tabelas temporárias e variáveis de tabela, `UPDATE ... FROM ... INNER JOIN`, `MERGE`, nem para texto em comentários e strings.

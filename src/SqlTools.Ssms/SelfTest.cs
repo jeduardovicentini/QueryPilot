@@ -302,7 +302,77 @@ namespace SqlTools.Ssms
 
             await FormatChecksAsync(dte, view, check);
             await SafetyChecksAsync(pkg, dte, server, check);
+            await DefinitionChecksAsync(dte, server, check);
             SetText(dte, "");
+        }
+
+        /// <summary>F12 (tabela via SMO, procedure como ALTER) e tooltip do mouse.</summary>
+        private static async Task DefinitionChecksAsync(DTE dte, string server, Action<string, bool, string> check)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            SsmsBridge.OpenNewQueryWindow(SsmsBridge.BuildConnection(server, "", CompletionDb));
+            await Task.Delay(3000);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var view = EditorAccess.GetActiveWpfTextView();
+
+            async System.Threading.Tasks.Task<string> F12Async(string text, int caret)
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                var before = dte.ActiveDocument?.FullName;
+                SetText(dte, text);
+                view.Caret.MoveTo(new Microsoft.VisualStudio.Text.SnapshotPoint(view.TextSnapshot, caret));
+                view.VisualElement.Focus();
+                object cin = null, cout = null;
+                dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.GoToDefinition, ref cin, ref cout);
+                for (int i = 0; i < 80; i++)
+                {
+                    await Task.Delay(500);
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    if (dte.ActiveDocument != null && dte.ActiveDocument.FullName != before) break;
+                }
+                var doc = dte.ActiveDocument;
+                if (doc == null || doc.FullName == before) return "(nenhuma aba nova)";
+                var td = (TextDocument)doc.Object("TextDocument");
+                var script = td.StartPoint.CreateEditPoint().GetText(td.EndPoint);
+                var c = SsmsBridge.GetActiveWindowEditorConnection();
+                if (c?.Database != CompletionDb) script = "(banco errado: " + c?.Database + ") " + script;
+                doc.Close(vsSaveChanges.vsSaveChangesNo);
+                await Task.Delay(500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                return script;
+            }
+
+            var table = await F12Async("SELECT * FROM Customer c", 17);
+            check("F12: tabela com PK, conectada no banco", table.Contains("CREATE TABLE [dbo].[Customer]") && table.Contains("PRIMARY KEY") && !table.StartsWith("("),
+                table.Length > 300 ? table.Substring(0, 300).Replace("\r\n", "⏎") : table.Replace("\r\n", "⏎"));
+            var fk = await F12Async("SELECT o.Total FROM [Order] o", 8);
+            check("F12: alias.coluna abre a tabela com FK", fk.Contains("CREATE TABLE [dbo].[Order]") && fk.Contains("FOREIGN KEY"), fk.Length > 200 ? fk.Substring(0, 200) : fk);
+            var proc = await F12Async("EXEC usp_GetCustomer 1", 10);
+            check("F12: procedure como ALTER", System.Text.RegularExpressions.Regex.IsMatch(proc, @"ALTER\s+PROCEDURE") && proc.Contains("usp_GetCustomer"), proc.Replace("\r\n", "⏎"));
+
+            // tooltip
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            SetText(dte, "SELECT * FROM Customer");
+            view = EditorAccess.GetActiveWpfTextView();
+            var broker = EditorAccess.ComponentModel.GetService<Microsoft.VisualStudio.Language.Intellisense.IAsyncQuickInfoBroker>();
+            var tp = view.TextSnapshot.CreateTrackingPoint(17, Microsoft.VisualStudio.Text.PointTrackingMode.Positive);
+            view.VisualElement.Focus();
+            Microsoft.VisualStudio.Language.Intellisense.IAsyncQuickInfoSession session = null;
+            try { session = await broker.TriggerQuickInfoAsync(view, tp, Microsoft.VisualStudio.Language.Intellisense.QuickInfoSessionOptions.None); }
+            catch (Exception ex) { Log.Warn("TriggerQuickInfoAsync falhou.", ex); }
+            // o Trigger pode devolver null antes das fontes terminarem; a sessão fica no broker
+            await Task.Delay(1500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            session = session ?? broker.GetSession(view);
+            var content = session == null ? "(sem sessão)" : session.State + ": " + string.Join(" | ", session.Content.Select(x => x?.GetType().Name + "=" + x));
+            check("Dica no mouse: colunas da tabela", content.Contains("dbo.Customer  (tabela)") && content.Contains("CustomerID int"), content.Replace("\r\n", "⏎"));
+            if (session != null) await session.DismissAsync();
+
+            Command defCmd = null;
+            foreach (Command c in dte.Commands)
+                if (string.Equals(c.Guid, PackageGuids.CmdSet.ToString("B"), StringComparison.OrdinalIgnoreCase) && c.ID == PackageIds.GoToDefinition) { defCmd = c; break; }
+            var bt = string.Join(" | ", (defCmd?.Bindings as object[] ?? new object[0]).Select(x => x.ToString()));
+            check("F12: atalho", bt.Contains("::F12"), defCmd?.Name + " " + bt);
         }
 
         /// <summary>Alerta de DELETE sem WHERE (cancela e confirma, conferindo no banco) e reabrir aba fechada.</summary>
