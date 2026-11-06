@@ -49,6 +49,12 @@ Lições da v0.2:
 - Sessão de completion precisa fechar em espaço/pontuação (commit manager); senão o span cresce e o Tab troca a linha inteira.
 - Metadados: nada de `sys.all_*` nem variável de tabela (10-30 s); sistema separado por servidor; `OPTION (LOOP JOIN)` para não pedir memory grant (RESOURCE_SEMAPHORE no LocalDB ocupado).
 
+## v0.3: autocomplete completo (entregue em 2026-11-06)
+- [x] Tabelas temporárias (`CREATE TABLE #t`, `SELECT ... INTO #t`) e variáveis de tabela (`DECLARE @t TABLE`) com colunas e tipos
+- [x] Parâmetros da procedure no `EXEC` (todos de uma vez ou os pendentes)
+- [x] Snippets embutidos (ssf, st, btc, bte, ij, lj...)
+- [x] Self-test: parâmetros, temporária e snippet digitado + Tab (34 checks)
+
 ## Depois
-- Autocomplete: temp tables (#t) e variáveis de tabela com colunas, parâmetros de procedure no EXEC, snippets, cross-database (`banco.schema.`)
+- Autocomplete: cross-database (`banco.schema.`), snippets do usuário (arquivo), colunas de funções de tabela com parâmetros
 - Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, formatter, snippets, schema compare (DacFx)

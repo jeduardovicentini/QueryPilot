@@ -10,7 +10,7 @@ namespace SqlTools.Completion
     public enum SuggestionKind
     {
         Keyword, Function, Schema, Table, View, TableFunction, ScalarFunction, Procedure, Synonym,
-        Column, Variable, Database, Alias, Cte, Join, JoinCondition, ColumnList
+        Column, Variable, Database, Alias, Cte, Join, JoinCondition, ColumnList, Snippet, Parameter
     }
 
     public sealed class Suggestion
@@ -63,20 +63,28 @@ namespace SqlTools.Completion
             switch (ctx.Kind)
             {
                 case ContextKind.StatementStart:
+                    AddSnippets(list, inStatementOnly: false);
                     AddKeywords(list);
                     break;
 
                 case ContextKind.Expression:
                     AddExpression(list, ctx, scope);
+                    AddSnippets(list, inStatementOnly: true);
                     break;
 
                 case ContextKind.AfterTableRef:
+                    AddSnippets(list, inStatementOnly: true);
                     AddKeywords(list);
+                    break;
+
+                case ContextKind.ProcParameters:
+                    AddProcParameters(list, ctx, md, all: true);
                     break;
 
                 case ContextKind.ObjectName:
                     if (ctx.IsJoin && md != null) AddJoins(list, scope, md);
                     AddCtes(list, ctx, opt);
+                    AddLocalTables(list, ctx, opt);
                     if (md != null) AddObjects(list, ctx, md, null, opt);
                     if (md != null) AddSchemas(list, md);
                     if (ctx.ObjectKeyword == "DELETE") list.Add(Kw("FROM", 1));
@@ -116,6 +124,7 @@ namespace SqlTools.Completion
                     break;
 
                 case ContextKind.Variable:
+                    if (ctx.ProcedureName.Count > 0) AddProcParameters(list, ctx, md, all: false);
                     foreach (var v in ctx.Variables)
                         list.Add(new Suggestion { DisplayText = v, InsertText = v, Kind = SuggestionKind.Variable, Priority = 0, Description = "Variável" });
                     foreach (var v in new[] { "@@ROWCOUNT", "@@ERROR", "@@IDENTITY", "@@TRANCOUNT", "@@SPID", "@@VERSION", "@@SERVERNAME", "@@FETCH_STATUS" })
@@ -144,7 +153,11 @@ namespace SqlTools.Completion
             {
                 var rt = new ResolvedTable { Ref = r };
                 var cte = r.Parts.Count == 1 ? ctx.Ctes.FirstOrDefault(c => Eq(c.Name, r.Name)) : null;
-                if (r.IsDerived)
+                var local = r.Parts.Count >= 1 && r.Name != null && (r.Name.StartsWith("#") || r.Name.StartsWith("@"))
+                    ? ctx.LocalTables.FirstOrDefault(l => Eq(l.Name, r.Name)) : null;
+                if (local != null)
+                    rt.Columns.AddRange(local.DerivedColumns.Select((c, i) => new DbColumn { Name = c, Ordinal = i + 1, DataType = i < local.DerivedTypes.Count ? local.DerivedTypes[i] : null }));
+                else if (r.IsDerived)
                     rt.Columns.AddRange(r.DerivedColumns.Select((c, i) => new DbColumn { Name = c, Ordinal = i + 1 }));
                 else if (cte != null)
                     rt.Columns.AddRange(cte.DerivedColumns.Select((c, i) => new DbColumn { Name = c, Ordinal = i + 1 }));
@@ -198,6 +211,77 @@ namespace SqlTools.Completion
             foreach (var f in SqlKeywords.Functions)
                 list.Add(new Suggestion { DisplayText = f.Key, InsertText = f.Key, Kind = SuggestionKind.Function, Priority = 30, Description = f.Value });
             AddKeywords(list);
+        }
+
+        private static void AddSnippets(List<Suggestion> list, bool inStatementOnly)
+        {
+            foreach (var sn in SqlSnippets.BuiltIn.Where(x => !inStatementOnly || x.InStatement))
+                list.Add(new Suggestion
+                {
+                    DisplayText = sn.Shortcut,
+                    InsertText = sn.Text,
+                    FilterText = sn.Shortcut,
+                    Kind = SuggestionKind.Snippet,
+                    Priority = 35,
+                    Detail = sn.Description,
+                    Description = "Snippet " + sn.Shortcut + " (Tab)\n" + sn.Text
+                });
+        }
+
+        /// <summary>Tabelas temporárias e variáveis de tabela no FROM/JOIN.</summary>
+        private static void AddLocalTables(List<Suggestion> list, SqlCompletionContext ctx, CompletionOptions opt)
+        {
+            foreach (var l in ctx.LocalTables)
+            {
+                var insert = l.Name;
+                if (WantsAlias(ctx, opt)) insert += " " + AliasGenerator.For(l.Name, UsedAliases(ctx));
+                list.Add(new Suggestion
+                {
+                    DisplayText = l.Name,
+                    InsertText = insert,
+                    FilterText = l.Name,
+                    Kind = SuggestionKind.Table,
+                    Priority = 6,
+                    Description = (l.Name.StartsWith("@") ? "Variável de tabela" : "Tabela temporária") + " (" + string.Join(", ", l.DerivedColumns) + ")"
+                });
+            }
+        }
+
+        /// <summary>Parâmetros da procedure do EXEC (os ainda não informados) e, no começo da lista, todos de uma vez.</summary>
+        private static void AddProcParameters(List<Suggestion> list, SqlCompletionContext ctx, DatabaseMetadata md, bool all)
+        {
+            if (md == null || ctx.ProcedureName.Count == 0) return;
+            var name = ctx.ProcedureName[ctx.ProcedureName.Count - 1];
+            var schema = ctx.ProcedureName.Count >= 2 ? ctx.ProcedureName[ctx.ProcedureName.Count - 2] : null;
+            var proc = md.Find(schema, name);
+            if (proc == null || proc.Kind != DbObjectKind.Procedure) return;
+            var pending = proc.Parameters.OrderBy(p => p.Ordinal)
+                .Where(p => !ctx.UsedParameters.Any(u => Eq(u, p.Name))).ToList();
+            if (pending.Count == 0) return;
+
+            if (all && ctx.UsedParameters.Count == 0 && pending.Count > 1)
+            {
+                var text = string.Join(", ", pending.Select(p => p.Name + " = " + (p.IsOutput ? p.Name + " OUTPUT" : "NULL")));
+                list.Add(new Suggestion
+                {
+                    DisplayText = "(todos os parâmetros)",
+                    InsertText = text,
+                    FilterText = "@",
+                    Kind = SuggestionKind.ColumnList,
+                    Priority = 0,
+                    Description = text
+                });
+            }
+            foreach (var p in pending)
+                list.Add(new Suggestion
+                {
+                    DisplayText = p.Name,
+                    InsertText = p.Name,
+                    Kind = SuggestionKind.Parameter,
+                    Priority = 1,
+                    Detail = p.DataType + (p.IsOutput ? " OUTPUT" : ""),
+                    Description = "Parâmetro de " + proc.FullName + ": " + p.Name + " " + p.DataType + (p.IsOutput ? " OUTPUT" : "")
+                });
         }
 
         private static void AddCtes(List<Suggestion> list, SqlCompletionContext ctx, CompletionOptions opt)

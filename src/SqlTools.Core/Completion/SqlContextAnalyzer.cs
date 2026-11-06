@@ -32,7 +32,9 @@ namespace SqlTools.Completion
         /// <summary>Digitando @variável.</summary>
         Variable,
         /// <summary>Cursor logo depois de * no SELECT.</summary>
-        StarExpansion
+        StarExpansion,
+        /// <summary>Depois de EXEC proc (ou de uma vírgula na lista de parâmetros).</summary>
+        ProcParameters
     }
 
     public sealed class TableRef
@@ -44,6 +46,8 @@ namespace SqlTools.Completion
         /// <summary>Subconsulta, CTE ou variável de tabela: as colunas vêm de <see cref="DerivedColumns"/>.</summary>
         public bool IsDerived { get; set; }
         public List<string> DerivedColumns { get; } = new List<string>();
+        /// <summary>Tipos das colunas derivadas, quando conhecidos (tabela temporária/variável de tabela).</summary>
+        public List<string> DerivedTypes { get; } = new List<string>();
 
         public string Name => Parts.Count == 0 ? null : Parts[Parts.Count - 1];
         public string Schema => Parts.Count >= 2 ? Parts[Parts.Count - 2] : null;
@@ -75,6 +79,11 @@ namespace SqlTools.Completion
         public TableRef JoinTarget { get; set; }
         public TableRef InsertTarget { get; set; }
         public List<string> Variables { get; } = new List<string>();
+        /// <summary>Tabelas temporárias (#t, ##t) do script e variáveis de tabela (@t) do batch, com colunas.</summary>
+        public List<TableRef> LocalTables { get; } = new List<TableRef>();
+        /// <summary>Para ProcParameters (e @ dentro de um EXEC): nome da procedure e parâmetros já informados.</summary>
+        public List<string> ProcedureName { get; } = new List<string>();
+        public List<string> UsedParameters { get; } = new List<string>();
 
         /// <summary>Para StarExpansion: o trecho a substituir (o * ou alias.*) e o qualificador, se houver.</summary>
         public int StarStart { get; set; }
@@ -130,14 +139,16 @@ namespace SqlTools.Completion
             ctx.Variables.AddRange(batch.Where(t => t.Kind == TokenKind.Variable && t != word && t.Text.Length > 1 && !t.Text.StartsWith("@@"))
                 .Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase));
 
-            if (word != null && word.Kind == TokenKind.Variable)
-            {
-                ctx.Kind = ContextKind.Variable;
-                return ctx;
-            }
+            CollectLocalTables(sig, batch, word, ctx.LocalTables);
 
             // 3) instrução atual
             var before = batch.Where(t => t.End <= ctx.ReplaceStart && t != word).ToList();
+            if (word != null && word.Kind == TokenKind.Variable)
+            {
+                DetectExec(before, ctx);
+                ctx.Kind = ContextKind.Variable;
+                return ctx;
+            }
             var stmtStarts = SegmentStatements(batch);
             int lastBeforeIdx = before.Count == 0 ? -1 : batch.IndexOf(before[before.Count - 1]);
             if (lastBeforeIdx >= 0 && batch[lastBeforeIdx].Kind == TokenKind.Semicolon)
@@ -232,6 +243,10 @@ namespace SqlTools.Completion
 
             if (last.Is("EXEC", "EXECUTE")) return ContextKind.Procedure;
             if (last.Is("USE")) return ContextKind.Database;
+
+            // EXEC proc ␣ / EXEC proc @a = 1, ␣
+            var nameEnd = DetectExec(before, ctx);
+            if (nameEnd >= 0 && (nameEnd == before.Count || last.Kind == TokenKind.Comma)) return ContextKind.ProcParameters;
 
             if (last.Is(ObjectKeywords) || last.Is("DELETE", "INSERT"))
             {
@@ -495,6 +510,119 @@ namespace SqlTools.Completion
                 ctes.Add(cte);
                 if (i < t.Count && t[i].Kind == TokenKind.Comma) { i++; continue; }
                 break;
+            }
+        }
+
+        /// <summary>
+        /// Se o fim de <paramref name="before"/> está dentro de um EXEC (nome da procedure + lista de parâmetros),
+        /// preenche ProcedureName/UsedParameters e devolve o índice logo depois do nome; senão, -1.
+        /// </summary>
+        private static int DetectExec(List<SqlToken> before, SqlCompletionContext ctx)
+        {
+            int e = -1;
+            for (int i = before.Count - 1; i >= 0; i--)
+            {
+                var t = before[i];
+                if (t.Is("EXEC", "EXECUTE")) { e = i; break; }
+                if (t.Kind == TokenKind.Semicolon || t.Kind == TokenKind.OpenParen || t.Kind == TokenKind.CloseParen) return -1;
+                if (t.Kind == TokenKind.Identifier && SqlKeywords.StatementStarters.Contains(t.Text)) return -1;
+            }
+            if (e < 0) return -1;
+            int j = e + 1;
+            // EXEC @ret = proc
+            if (j + 1 < before.Count && before[j].Kind == TokenKind.Variable && before[j + 1].Text == "=") j += 2;
+            var parts = new List<string>();
+            int end = ReadName(before, j, parts);
+            if (parts.Count == 0 || parts[0].StartsWith("@")) return -1;
+            ctx.ProcedureName.Clear();
+            ctx.ProcedureName.AddRange(parts);
+            for (int k = end; k + 1 < before.Count; k++)
+                if (before[k].Kind == TokenKind.Variable && before[k + 1].Text == "=") ctx.UsedParameters.Add(before[k].Text);
+            return end;
+        }
+
+        /// <summary>CREATE TABLE #t (...), SELECT ... INTO #t e DECLARE @t TABLE (...).</summary>
+        private static void CollectLocalTables(List<SqlToken> all, List<SqlToken> batch, SqlToken word, List<TableRef> result)
+        {
+            var batchSet = new HashSet<SqlToken>(batch);
+            for (int i = 0; i < all.Count; i++)
+            {
+                var t = all[i];
+                if (t == word) continue;
+                TableRef r = null;
+                if (t.Kind == TokenKind.Identifier && t.Text.StartsWith("#") && i >= 2 && all[i - 1].Is("TABLE") && all[i - 2].Is("CREATE")
+                    && i + 1 < all.Count && all[i + 1].Kind == TokenKind.OpenParen)
+                {
+                    r = NewLocal(t);
+                    ColumnDefs(all, i + 1, r);
+                }
+                else if (t.Kind == TokenKind.Variable && batchSet.Contains(t) && i + 2 < all.Count && all[i + 1].Is("TABLE") && all[i + 2].Kind == TokenKind.OpenParen
+                    && i >= 1 && (all[i - 1].Is("DECLARE") || all[i - 1].Kind == TokenKind.Comma))
+                {
+                    r = NewLocal(t);
+                    ColumnDefs(all, i + 2, r);
+                }
+                else if (t.Kind == TokenKind.Identifier && t.Text.StartsWith("#") && i >= 1 && all[i - 1].Is("INTO"))
+                {
+                    // SELECT ... INTO #t: o SELECT do mesmo nível, antes do INTO
+                    int depth = 0, sel = -1;
+                    for (int k = i - 2; k >= 0; k--)
+                    {
+                        if (all[k].Kind == TokenKind.CloseParen) depth++;
+                        else if (all[k].Kind == TokenKind.OpenParen) { if (depth == 0) break; depth--; }
+                        else if (depth == 0 && all[k].Is("SELECT")) { sel = k; break; }
+                        else if (depth == 0 && all[k].Kind == TokenKind.Semicolon) break;
+                    }
+                    if (sel < 0) continue;
+                    r = NewLocal(t);
+                    r.DerivedColumns.AddRange(SelectListNames(all, sel, i - 1));
+                    foreach (var _ in r.DerivedColumns) r.DerivedTypes.Add(null);
+                }
+                if (r != null && !result.Any(x => string.Equals(x.Name, r.Name, StringComparison.OrdinalIgnoreCase))) result.Add(r);
+            }
+        }
+
+        private static TableRef NewLocal(SqlToken t)
+        {
+            var r = new TableRef { Position = t.Start, IsDerived = true };
+            r.Parts.Add(t.Kind == TokenKind.Variable ? t.Text : t.Value);
+            return r;
+        }
+
+        private static readonly string[] NotColumns = { "CONSTRAINT", "PRIMARY", "UNIQUE", "INDEX", "CHECK", "FOREIGN", "PERIOD" };
+
+        /// <summary>Lê "(col tipo ..., col tipo ...)" a partir do parêntese em <paramref name="open"/>.</summary>
+        private static void ColumnDefs(List<SqlToken> t, int open, TableRef r)
+        {
+            int close = MatchParen(t, open);
+            if (close < 0) close = t.Count;
+            int i = open + 1;
+            while (i < close)
+            {
+                if (t[i].IsName && !t[i].Is(NotColumns))
+                {
+                    var name = t[i].Value;
+                    string type = null;
+                    if (i + 1 < close && t[i + 1].IsName)
+                    {
+                        type = t[i + 1].Value.ToLowerInvariant();
+                        if (i + 2 < close && t[i + 2].Kind == TokenKind.OpenParen)
+                        {
+                            int c = MatchParen(t, i + 2);
+                            if (c > 0) type += "(" + string.Concat(t.Skip(i + 3).Take(c - i - 3).Select(x => x.Text)) + ")";
+                        }
+                    }
+                    r.DerivedColumns.Add(name);
+                    r.DerivedTypes.Add(type);
+                }
+                // próximo item: depois da vírgula no nível do parêntese
+                int depth = 0;
+                for (; i < close; i++)
+                {
+                    if (t[i].Kind == TokenKind.OpenParen) depth++;
+                    else if (t[i].Kind == TokenKind.CloseParen) depth--;
+                    else if (depth == 0 && t[i].Kind == TokenKind.Comma) { i++; break; }
+                }
             }
         }
 

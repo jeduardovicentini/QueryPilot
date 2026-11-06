@@ -59,6 +59,7 @@ namespace SqlTools.Core.Tests
             Obj(5, "sys", "objects", DbObjectKind.View, C(1, "name", "sysname"), C(2, "object_id", "int"));
             var proc = Obj(6, "dbo", "usp_GetCustomer", DbObjectKind.Procedure);
             proc.Parameters.Add(new DbParameter { Name = "@id", DataType = "int", Ordinal = 1 });
+            proc.Parameters.Add(new DbParameter { Name = "@nome", DataType = "nvarchar(50)", Ordinal = 2, IsOutput = true });
             Obj(7, "sys", "sp_who2", DbObjectKind.Procedure);
 
             ForeignKey Fk(string name, DbObject from, DbObject to, string fc, string tc)
@@ -105,7 +106,7 @@ namespace SqlTools.Core.Tests
             var r = Run("SEL|");
             Assert.Equal(ContextKind.StatementStart, r.ctx.Kind);
             Assert.Equal("SEL", r.ctx.Prefix);
-            Assert.All(r.items, i => Assert.Equal(SuggestionKind.Keyword, i.Kind));
+            Assert.All(r.items, i => Assert.Contains(i.Kind, new[] { SuggestionKind.Keyword, SuggestionKind.Snippet }));
         }
 
         [Fact]
@@ -318,7 +319,8 @@ namespace SqlTools.Core.Tests
         {
             var r = Run("SELECT * FROM Customer c |");
             Assert.Equal(ContextKind.AfterTableRef, r.ctx.Kind);
-            Assert.All(r.items, i => Assert.Equal(SuggestionKind.Keyword, i.Kind));
+            Assert.All(r.items, i => Assert.Contains(i.Kind, new[] { SuggestionKind.Keyword, SuggestionKind.Snippet }));
+            Assert.Contains(r.items, i => i.DisplayText == "ij" && i.InsertText == "INNER JOIN");
         }
 
         [Fact]
@@ -328,6 +330,58 @@ namespace SqlTools.Core.Tests
             Assert.Equal(2, r.ctx.Tables.Count);
             r = Run("SELECT * FROM Customer c, |");
             Assert.Equal(ContextKind.ObjectName, r.ctx.Kind);
+        }
+
+        [Fact]
+        public void Tabela_temporaria_com_colunas_e_tipos()
+        {
+            var r = Run("CREATE TABLE #t (Id int NOT NULL, Nome varchar(50), CONSTRAINT pk PRIMARY KEY (Id));\nSELECT t.| FROM #t t");
+            Assert.Equal(new[] { "Id", "Nome" }, r.items.Select(i => i.DisplayText));
+            Assert.Equal("varchar(50)", r.items[1].Detail);
+        }
+
+        [Fact]
+        public void Select_into_temporaria_e_variavel_de_tabela()
+        {
+            var r = Run("SELECT CustomerID, Name AS Nome INTO #c FROM Customer;\nSELECT c.| FROM #c c");
+            Assert.Equal(new[] { "CustomerID", "Nome" }, r.items.Select(i => i.DisplayText));
+
+            r = Run("DECLARE @x TABLE (A int, B decimal(10,2));\nSELECT x.| FROM @x x");
+            Assert.Equal(new[] { "A", "B" }, r.items.Select(i => i.DisplayText));
+            Assert.Equal("decimal(10,2)", r.items[1].Detail);
+        }
+
+        [Fact]
+        public void From_sugere_temporarias_do_script()
+        {
+            var r = Run("CREATE TABLE #t (Id int);\nGO\nSELECT * FROM |");
+            Assert.Contains(r.items, i => i.DisplayText == "#t" && i.InsertText == "#t t");
+        }
+
+        [Fact]
+        public void Exec_sugere_parametros_pendentes()
+        {
+            var r = Run("EXEC usp_GetCustomer |");
+            Assert.Equal(ContextKind.ProcParameters, r.ctx.Kind);
+            Assert.Contains(r.items, i => i.InsertText == "@id = NULL, @nome = @nome OUTPUT");
+            Assert.Contains(r.items, i => i.DisplayText == "@id" && i.Detail == "int");
+
+            r = Run("EXEC dbo.usp_GetCustomer @id = 1, |");
+            Assert.Equal(ContextKind.ProcParameters, r.ctx.Kind);
+            Assert.Equal(new[] { "@nome" }, r.items.Select(i => i.DisplayText));
+
+            r = Run("EXEC usp_GetCustomer @id = 1, @n|");
+            Assert.Equal(ContextKind.Variable, r.ctx.Kind);
+            Assert.Equal("@nome", r.items.First().DisplayText);
+        }
+
+        [Fact]
+        public void Snippets_no_inicio_da_instrucao()
+        {
+            var r = Run("ss|");
+            Assert.Contains(r.items, i => i.Kind == SuggestionKind.Snippet && i.DisplayText == "ssf" && i.InsertText == "SELECT * FROM");
+            r = Run("SELECT * FROM Customer WHERE |");
+            Assert.DoesNotContain(r.items, i => i.DisplayText == "ssf");
         }
 
         [Theory]

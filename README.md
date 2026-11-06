@@ -2,7 +2,7 @@
 
 Extensão gratuita e de código aberto para o **SQL Server Management Studio 22**.
 
-## Autocomplete (v0.2)
+## Autocomplete (v0.2 e v0.3)
 
 Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o Quick Info do SSMS continuam). A lista abre sozinha ao começar uma palavra, depois de `.`, `@` e de `FROM ␣`, `JOIN ␣`, `EXEC ␣`, `USE ␣`, `ON ␣`; `Ctrl+Espaço` abre em qualquer lugar.
 
@@ -15,6 +15,9 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 - **INSERT:** `INSERT INTO t ␣` sugere `(col1, col2, ...)` sem identity, calculadas e rowversion.
 - **EXEC** sugere procedures (com parâmetros na descrição); **USE**, bancos; **@**, variáveis do batch.
 - CTEs e subconsultas expõem as colunas do SELECT delas.
+- **Tabelas temporárias e variáveis de tabela:** `CREATE TABLE #t (...)`, `SELECT ... INTO #t` e `DECLARE @t TABLE (...)` do script entram no FROM e expõem as colunas (com tipo).
+- **Parâmetros no EXEC:** `EXEC proc ␣` sugere `(todos os parâmetros)` → `@id = NULL, @saida = @saida OUTPUT` e cada parâmetro que ainda falta; depois de cada vírgula, só os pendentes.
+- **Snippets:** `ssf` + Tab → `SELECT * FROM`; também `st` (TOP 100), `scf` (COUNT), `ii`, `df`, `bt`/`ct`/`rt` (transação), `btc` (TRY/CATCH), `bte` (transação com TRY/CATCH), `cte`, `ifex`, `ctt`, `snc`; no meio da instrução: `ij`, `lj`, `rj`, `ca`, `oa`, `ob`, `gb`, `wnl`, `isn`, `inn`.
 - **Confirmar:** Tab ou Enter. Espaço e pontuação só confirmam quando o digitado é exatamente o item, então alias e valores digitados nunca são trocados.
 
 Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.

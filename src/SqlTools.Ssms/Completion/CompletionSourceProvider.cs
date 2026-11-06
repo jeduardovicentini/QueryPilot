@@ -78,7 +78,8 @@ namespace SqlTools.Ssms.Completion
         /// <summary>Contextos que abrem a lista sozinhos depois de um espaço (FROM ␣, JOIN ␣, EXEC ␣...).</summary>
         private static readonly HashSet<ContextKind> AfterSpace = new HashSet<ContextKind>
         {
-            ContextKind.ObjectName, ContextKind.Procedure, ContextKind.Database, ContextKind.JoinCondition, ContextKind.AfterInsertTarget
+            ContextKind.ObjectName, ContextKind.Procedure, ContextKind.Database, ContextKind.JoinCondition, ContextKind.AfterInsertTarget,
+            ContextKind.ProcParameters
         };
 
         public CompletionStartData InitializeCompletion(CompletionTrigger trigger, SnapshotPoint triggerLocation, CancellationToken token)
@@ -124,7 +125,7 @@ namespace SqlTools.Ssms.Completion
             if (c == '.') return ctx.Kind == ContextKind.Member;
             if (c == '@') return ctx.Kind == ContextKind.Variable;
             if (c == ' ') return AfterSpace.Contains(ctx.Kind);
-            if (c == '(' || c == ',') return ctx.Kind == ContextKind.InsertColumns || (c == ',' && ctx.Kind == ContextKind.ObjectName);
+            if (c == '(' || c == ',') return ctx.Kind == ContextKind.InsertColumns || (c == ',' && (ctx.Kind == ContextKind.ObjectName || ctx.Kind == ContextKind.ProcParameters));
             if (char.IsLetter(c) || c == '_' || c == '#')
             {
                 // só no começo da palavra
@@ -208,6 +209,8 @@ namespace SqlTools.Ssms.Completion
                     case SuggestionKind.Join: m = KnownMonikers.Relationship; break;
                     case SuggestionKind.JoinCondition: m = KnownMonikers.Relationship; break;
                     case SuggestionKind.ColumnList: m = KnownMonikers.ColumnGroup; break;
+                    case SuggestionKind.Snippet: m = KnownMonikers.Snippet; break;
+                    case SuggestionKind.Parameter: m = KnownMonikers.Parameter; break;
                     default: m = KnownMonikers.IntellisenseKeyword; break;
                 }
                 img = new ImageElement(new ImageId(m.Guid, m.Id));

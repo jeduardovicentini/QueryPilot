@@ -229,6 +229,10 @@ namespace SqlTools.Ssms
             check("Completion: procedures", exec.Contains("usp_GetCustomer"), "");
             var sch = await ItemsAt("SELECT * FROM sales.|");
             check("Completion: objetos do schema", sch.Contains("Product"), string.Join(",", sch));
+            var pars = await ItemsAt("EXEC usp_GetCustomer |");
+            check("Completion: parâmetros da procedure", pars.Contains("@id"), string.Join(",", pars));
+            var tmp = await ItemsAt("CREATE TABLE #t (Id int, Nome varchar(10));\nSELECT t.| FROM #t t");
+            check("Completion: colunas da tabela temporária", tmp.Count == 2 && tmp.Contains("Nome"), string.Join(",", tmp));
             var sysv = await ItemsAt("SELECT * FROM sys.|");
             check("Completion: views de sistema (sys.)", sysv.Contains("objects") && sysv.Contains("tables"), sysv.Count + " itens");
 
@@ -255,6 +259,15 @@ namespace SqlTools.Ssms
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             var final = view.TextSnapshot.GetText();
             check("Completion: Tab insere tabela com alias", final == "SELECT * FROM Customer c", final);
+
+            // snippet: ssf + Tab
+            SetText(dte, "");
+            await EditorAccess.TypeAsync(view, "ssf");
+            await EditorAccess.SendTabAsync(view);
+            await Task.Delay(500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var snip = view.TextSnapshot.GetText();
+            check("Completion: snippet ssf + Tab", snip == "SELECT * FROM", snip);
 
             // recarga a quente (Atualizar metadados)
             var c2 = SsmsBridge.GetActiveWindowEditorConnection();
