@@ -84,6 +84,30 @@ VALUES (@at, @srv, @db, @login, @dur, @rows, @st, @txt); SELECT last_insert_rowi
             }
         }
 
+        /// <summary>Guarda o texto de uma aba fechada; a mesma query no mesmo servidor/banco fica só uma vez (a mais recente).</summary>
+        public long AddClosedTab(string server, string database, string login, string text, DateTime closedAtUtc)
+        {
+            using (var c = Open())
+            using (var cmd = c.CreateCommand())
+            {
+                cmd.CommandText = "DELETE FROM QueryHistory WHERE Status = @st AND Server = @srv AND DatabaseName = @db AND QueryText = @txt";
+                cmd.Parameters.AddWithValue("@st", (int)ExecutionStatus.ClosedTab);
+                cmd.Parameters.AddWithValue("@srv", server ?? string.Empty);
+                cmd.Parameters.AddWithValue("@db", database ?? string.Empty);
+                cmd.Parameters.AddWithValue("@txt", text.Length > MaxQueryLength ? text.Substring(0, MaxQueryLength) : text);
+                cmd.ExecuteNonQuery();
+            }
+            return Add(new HistoryEntry
+            {
+                ExecutedAtUtc = closedAtUtc,
+                Server = server,
+                Database = database,
+                Login = login,
+                Status = ExecutionStatus.ClosedTab,
+                QueryText = text,
+            });
+        }
+
         public void Complete(long id, ExecutionStatus status, long? durationMs, long? rowsAffected, string database = null)
         {
             using (var c = Open())
@@ -116,7 +140,7 @@ WHERE Id = @id";
         public List<HistoryEntry> Search(HistoryQuery q)
         {
             q = q ?? new HistoryQuery();
-            var sql = new StringBuilder("SELECT * FROM QueryHistory WHERE 1 = 1");
+            var sql = new StringBuilder("SELECT * FROM QueryHistory WHERE Status " + (q.ClosedTabs ? "= " : "<> ") + (int)ExecutionStatus.ClosedTab);
             using (var c = Open())
             using (var cmd = c.CreateCommand())
             {

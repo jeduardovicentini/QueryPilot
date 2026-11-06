@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using SqlTools.History;
 using SqlTools.Infra;
+using SqlTools.Safety;
 using SqlTools.Settings;
 using SqlTools.Ssms.Integration;
 
@@ -35,6 +38,22 @@ namespace SqlTools.Ssms.History
 
         public event EventHandler<HistoryEntry> ExecutionRecorded;
 
+        /// <summary>Pergunta se executa mesmo com DELETE/UPDATE sem WHERE. Trocável no self-test.</summary>
+        internal Func<IReadOnlyList<UnsafeStatement>, bool> ConfirmUnsafe { get; set; } = AskUser;
+
+        /// <summary>Quantas execuções o alerta cancelou (self-test).</summary>
+        internal int UnsafeCancelled { get; private set; }
+
+        private static bool AskUser(IReadOnlyList<UnsafeStatement> issues)
+        {
+            var list = string.Join(Environment.NewLine, issues.Take(8).Select(i => "   • " + i));
+            if (issues.Count > 8) list += Environment.NewLine + "   • ... e mais " + (issues.Count - 8);
+            var msg = "Esta execução altera tabelas inteiras (sem WHERE):" + Environment.NewLine + Environment.NewLine + list +
+                      Environment.NewLine + Environment.NewLine + "Executar mesmo assim?";
+            return System.Windows.MessageBox.Show(msg, ProductInfo.Name + " — confirmação", System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning, System.Windows.MessageBoxResult.No) == System.Windows.MessageBoxResult.Yes;
+        }
+
         public ExecutionMonitor(DTE dte, HistoryStore store, SettingsStore settings)
         {
             _dte = dte;
@@ -55,7 +74,8 @@ namespace SqlTools.Ssms.History
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
-                if (!_settings.Current.CaptureEnabled) return;
+                var settings = _settings.Current;
+                if (!settings.CaptureEnabled && !settings.UnsafeGuardEnabled) return;
 
                 var frame = SsmsBridge.GetActiveDocumentFrame();
                 var editor = SsmsBridge.GetEditorControl(frame);
@@ -63,6 +83,19 @@ namespace SqlTools.Ssms.History
 
                 var text = GetTextToExecute();
                 if (string.IsNullOrWhiteSpace(text)) return;
+
+                if (settings.UnsafeGuardEnabled)
+                {
+                    var issues = UnsafeStatements.Find(text);
+                    if (issues.Count > 0 && !ConfirmUnsafe(issues))
+                    {
+                        cancelDefault = true;
+                        UnsafeCancelled++;
+                        Log.Info("Execução cancelada pelo usuário: " + string.Join("; ", issues));
+                        return;
+                    }
+                }
+                if (!settings.CaptureEnabled) return;
 
                 var conn = SsmsBridge.GetEditorConnection(editor) ?? SsmsBridge.GetActiveWindowConnection() ?? new ConnectionSnapshot();
                 var entry = new HistoryEntry

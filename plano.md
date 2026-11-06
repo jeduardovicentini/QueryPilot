@@ -63,6 +63,13 @@ Lições da v0.2:
 
 Lições: caixa só em palavras reservadas (ou contexto certo: `FETCH NEXT`, `OUTPUT` de parâmetro) — colunas como `Offset`/`Output` não podem mudar, porque bancos com collation CS quebrariam.
 
+## v0.5: proteção e abas fechadas (entregue em 2026-11-06)
+- [x] Alerta de DELETE/UPDATE sem WHERE e TRUNCATE no BeforeExecute do Query.Execute (cancela de verdade), reaproveitando SegmentStatements
+- [x] Abas fechadas no mesmo SQLite (Status = ClosedTab), sem duplicar texto igual; `Ctrl+Q, Ctrl+T` e seletor na janela do histórico
+- [x] Self-test: "Não" cancela e "Sim" executa (conferido no banco); fechar e reabrir no mesmo banco (44 checks)
+
+Lição: no DocumentClosing o frame já saiu da enumeração de janelas; a conexão é lembrada antes (OnActiveFrameChanged + depois de executar) e, se a janela que fecha ainda é a ativa, lida na hora.
+
 ## Depois
 - Autocomplete: cross-database (`banco.schema.`), snippets do usuário (arquivo), colunas de funções de tabela com parâmetros
 - Histórico de abas fechadas / restaurar sessão, alerta de DELETE/UPDATE sem WHERE, schema compare (DacFx)

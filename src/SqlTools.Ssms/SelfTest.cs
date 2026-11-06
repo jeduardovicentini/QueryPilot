@@ -277,7 +277,72 @@ namespace SqlTools.Ssms
             check("Completion: recarga de metadados", md != null && md.ForeignKeys.Count == 3, sw.ElapsedMilliseconds + " ms");
 
             await FormatChecksAsync(dte, view, check);
+            await SafetyChecksAsync(pkg, dte, server, check);
             SetText(dte, "");
+        }
+
+        /// <summary>Alerta de DELETE sem WHERE (cancela e confirma, conferindo no banco) e reabrir aba fechada.</summary>
+        private static async Task SafetyChecksAsync(SqlToolsPackage pkg, DTE dte, string server, Action<string, bool, string> check)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            long Count(string sql)
+            {
+                using (var c = SsmsBridge.CreateDbConnection(SsmsBridge.BuildConnection(server, "", CompletionDb), CompletionDb))
+                {
+                    c.Open();
+                    using (var cmd = c.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0);
+                    }
+                }
+            }
+            Count("IF OBJECT_ID('dbo.GuardProbe') IS NOT NULL DROP TABLE dbo.GuardProbe; CREATE TABLE dbo.GuardProbe (i int); INSERT dbo.GuardProbe VALUES (1), (2); SELECT 0");
+
+            var original = pkg.Monitor.ConfirmUnsafe;
+            string asked = null;
+            try
+            {
+                var before = pkg.Monitor.UnsafeCancelled;
+                pkg.Monitor.ConfirmUnsafe = issues => { asked = string.Join("; ", issues); return false; };
+                SetText(dte, "SELECT 1;\r\nDELETE FROM dbo.GuardProbe");
+                dte.ExecuteCommand("Query.Execute");
+                await Task.Delay(2500);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                check("Alerta: perguntou antes do DELETE sem WHERE", asked == "DELETE em dbo.GuardProbe (linha 2)", asked);
+                check("Alerta: 'Não' cancela a execução", pkg.Monitor.UnsafeCancelled == before + 1 && Count("SELECT COUNT(*) FROM dbo.GuardProbe") == 2, "cancelamentos=" + (pkg.Monitor.UnsafeCancelled - before));
+
+                pkg.Monitor.ConfirmUnsafe = issues => true;
+                var sure = "DELETE FROM dbo.GuardProbe -- confirmado";
+                SetText(dte, sure);
+                dte.ExecuteCommand("Query.Execute");
+                var done = await WaitForAsync(pkg.History, sure);
+                check("Alerta: 'Sim' executa", done?.Status == ExecutionStatus.Success && Count("SELECT COUNT(*) FROM dbo.GuardProbe") == 0, done?.Status.ToString());
+            }
+            finally
+            {
+                pkg.Monitor.ConfirmUnsafe = original;
+            }
+
+            // aba fechada: guarda texto + conexão e reabre conectada
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var tabText = "SELECT 'aba fechada " + Guid.NewGuid().ToString("N").Substring(0, 8) + "' AS teste";
+            SetText(dte, tabText);
+            dte.ActiveDocument.Close(vsSaveChanges.vsSaveChangesNo);
+            await Task.Delay(800);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var saved = pkg.History.Search(new HistoryQuery { ClosedTabs = true, Text = tabText }).FirstOrDefault();
+            check("Abas: texto e banco guardados ao fechar", saved != null && saved.QueryText == tabText && saved.Database == CompletionDb, saved?.Server + "/" + saved?.Database);
+
+            object cin = null, cout = null;
+            dte.Commands.Raise(PackageGuids.CmdSet.ToString("B"), PackageIds.ReopenClosedTab, ref cin, ref cout);
+            await Task.Delay(3000);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var doc = (TextDocument)dte.ActiveDocument.Object("TextDocument");
+            var reopenedText = doc.StartPoint.CreateEditPoint().GetText(doc.EndPoint);
+            var rc = SsmsBridge.GetActiveWindowEditorConnection();
+            check("Abas: Ctrl+Q, Ctrl+T reabre no mesmo banco", reopenedText == tabText && rc?.Database == CompletionDb, rc?.Database + " | " + reopenedText);
+            Count("DROP TABLE dbo.GuardProbe; SELECT 0");
         }
 
         /// <summary>Formatador pelo comando real: documento inteiro, Ctrl+Z, só a seleção e atalho.</summary>

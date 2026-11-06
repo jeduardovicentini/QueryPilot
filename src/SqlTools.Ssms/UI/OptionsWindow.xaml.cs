@@ -29,6 +29,8 @@ namespace SqlTools.Ssms.UI
             CompletionBox.Content = "Usar o autocomplete do " + ProductInfo.Name + " (desliga só a lista automática do IntelliSense nativo)";
             CompletionBox.IsChecked = s.CompletionEnabled;
             AutoAliasBox.IsChecked = s.CompletionAutoAlias;
+            UnsafeGuardBox.IsChecked = s.UnsafeGuardEnabled;
+            ClosedTabsBox.IsChecked = s.ClosedTabsEnabled;
             KeywordCaseBox.SelectedIndex = s.FormatKeywordCase >= 0 && s.FormatKeywordCase <= 2 ? s.FormatKeywordCase : 0;
             IndentBox.SelectedIndex = s.FormatIndent == 2 ? 1 : s.FormatIndent <= 0 ? 2 : 0;
             LeadingCommasBox.IsChecked = s.FormatLeadingCommas;
@@ -93,6 +95,8 @@ namespace SqlTools.Ssms.UI
             var s = _store.Current;
             s.CompletionEnabled = CompletionBox.IsChecked == true;
             s.CompletionAutoAlias = AutoAliasBox.IsChecked == true;
+            s.UnsafeGuardEnabled = UnsafeGuardBox.IsChecked == true;
+            s.ClosedTabsEnabled = ClosedTabsBox.IsChecked == true;
             s.FormatKeywordCase = Math.Max(0, KeywordCaseBox.SelectedIndex);
             s.FormatIndent = IndentBox.SelectedIndex == 1 ? 2 : IndentBox.SelectedIndex == 2 ? 0 : 4;
             s.FormatLeadingCommas = LeadingCommasBox.IsChecked == true;

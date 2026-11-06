@@ -14,6 +14,8 @@ namespace SqlTools.History
         /// <summary>Banco exato; null = todos.</summary>
         public string Database { get; set; }
         public bool OnlyErrors { get; set; }
+        /// <summary>true = só abas fechadas; false = só execuções.</summary>
+        public bool ClosedTabs { get; set; }
         public int Limit { get; set; } = 2000;
     }
 }

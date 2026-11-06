@@ -41,7 +41,13 @@
         <!-- Filtros -->
         <DockPanel Grid.Column="0" LastChildFill="True">
             <StackPanel DockPanel.Dock="Top">
-                <TextBlock Style="{StaticResource Caption}" Text="Período" Margin="0,0,0,4" />
+                <TextBlock Style="{StaticResource Caption}" Text="Mostrar" Margin="0,0,0,4" />
+                <ComboBox x:Name="ViewBox" SelectionChanged="OnFilterChanged">
+                    <ComboBoxItem Content="Queries executadas" />
+                    <ComboBoxItem Content="Abas fechadas" />
+                </ComboBox>
+
+                <TextBlock Style="{StaticResource Caption}" Text="Período" />
                 <ComboBox x:Name="PeriodBox" SelectionChanged="OnFilterChanged">
                     <ComboBoxItem Content="Hoje" Tag="0" />
                     <ComboBoxItem Content="Últimos 7 dias" Tag="7" IsSelected="True" />

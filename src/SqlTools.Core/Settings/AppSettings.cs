@@ -14,6 +14,10 @@ namespace SqlTools.Settings
         [DataMember] public bool CompletionEnabled { get; set; } = true;
         /// <summary>Ao escolher uma tabela no FROM/JOIN, inserir um alias curto.</summary>
         [DataMember] public bool CompletionAutoAlias { get; set; } = true;
+        /// <summary>Pedir confirmação antes de executar DELETE/UPDATE sem WHERE ou TRUNCATE.</summary>
+        [DataMember] public bool UnsafeGuardEnabled { get; set; } = true;
+        /// <summary>Guardar o texto das abas de query fechadas para reabrir.</summary>
+        [DataMember] public bool ClosedTabsEnabled { get; set; } = true;
         /// <summary>Formatação: 0 = MAIÚSCULAS, 1 = minúsculas, 2 = manter.</summary>
         [DataMember] public int FormatKeywordCase { get; set; }
         /// <summary>Formatação: espaços por nível (0 = tabulação).</summary>
@@ -21,6 +25,8 @@ namespace SqlTools.Settings
         [DataMember] public bool FormatLeadingCommas { get; set; }
         /// <summary>Interno: o atalho do formatador já foi configurado uma vez.</summary>
         [DataMember] public bool FormatShortcutApplied { get; set; }
+        /// <summary>Interno: o atalho de reabrir aba fechada já foi configurado uma vez.</summary>
+        [DataMember] public bool ReopenShortcutApplied { get; set; }
         /// <summary>Interno: valor original do "Auto list members" nativo (-1 = não guardado).</summary>
         [DataMember] public int NativeAutoListOriginal { get; set; } = -1;
         /// <summary>Interno: o atalho do histórico já foi configurado uma vez.</summary>
@@ -55,6 +61,8 @@ namespace SqlTools.Settings
             CompletionAutoAlias = true;
             NativeAutoListOriginal = -1;
             FormatIndent = 4;
+            UnsafeGuardEnabled = true;
+            ClosedTabsEnabled = true;
         }
 
         public Format.FormatOptions ToFormatOptions() => new Format.FormatOptions

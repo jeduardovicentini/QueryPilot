@@ -9,6 +9,8 @@ namespace SqlTools.History
         Success = 1,
         Error = 2,
         Cancelled = 3,
+        /// <summary>Não é execução: texto de uma aba de query fechada (para reabrir).</summary>
+        ClosedTab = 4,
     }
 
     public sealed class HistoryEntry

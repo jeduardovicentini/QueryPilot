@@ -36,6 +36,24 @@
           <LocCanonicalName>.$ProductName$.QueryHistory</LocCanonicalName>
         </Strings>
       </Button>
+      <Button guid="guidCmdSet" id="cmdReopenClosedTab" priority="0x0110" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Icon guid="ImageCatalogGuid" id="Undo" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Reabrir aba fechada</ButtonText>
+          <CanonicalName>.$ProductName$.ReopenClosedTab</CanonicalName>
+          <LocCanonicalName>.$ProductName$.ReopenClosedTab</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidCmdSet" id="cmdShowClosedTabs" priority="0x0120" type="Button">
+        <Parent guid="guidCmdSet" id="MainGroup" />
+        <Strings>
+          <ButtonText>Abas fechadas...</ButtonText>
+          <CanonicalName>.$ProductName$.ClosedTabs</CanonicalName>
+          <LocCanonicalName>.$ProductName$.ClosedTabs</LocCanonicalName>
+        </Strings>
+      </Button>
       <Button guid="guidCmdSet" id="cmdFormatSql" priority="0x0150" type="Button">
         <Parent guid="guidCmdSet" id="MainGroup" />
         <Icon guid="ImageCatalogGuid" id="FormatDocument" />
@@ -87,6 +105,7 @@
   <KeyBindings>
     <!-- Ctrl+Q, Ctrl+E — mesmo atalho do ApexSQL Complete -->
     <KeyBinding guid="guidCmdSet" id="cmdShowHistory" editor="guidVSStd97" key1="Q" mod1="Control" key2="E" mod2="Control" />
+    <KeyBinding guid="guidCmdSet" id="cmdReopenClosedTab" editor="guidVSStd97" key1="Q" mod1="Control" key2="T" mod2="Control" />
     <!-- Ctrl+K, Ctrl+Y — mesmo atalho de formatação do SQL Prompt -->
     <KeyBinding guid="guidCmdSet" id="cmdFormatSql" editor="guidVSStd97" key1="K" mod1="Control" key2="Y" mod2="Control" />
   </KeyBindings>
@@ -102,6 +121,8 @@
       <IDSymbol name="cmdOpenLog" value="0x0102" />
       <IDSymbol name="cmdRefreshMetadata" value="0x0103" />
       <IDSymbol name="cmdFormatSql" value="0x0104" />
+      <IDSymbol name="cmdReopenClosedTab" value="0x0105" />
+      <IDSymbol name="cmdShowClosedTabs" value="0x0106" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

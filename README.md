@@ -22,6 +22,12 @@ Substitui a lista automática do IntelliSense nativo (os sublinhados de erro e o
 
 Os metadados vêm de uma conexão própria criada pelo caminho do SSMS (qualquer tipo de autenticação), ficam em memória e recarregam sozinhos depois de um CREATE/ALTER/DROP executado. Também dá para forçar em *QueryPilot › Atualizar metadados do autocomplete*. Para voltar ao IntelliSense nativo: *QueryPilot › Opções* e desmarque o autocomplete; a lista nativa volta como estava.
 
+## Proteção e abas fechadas (v0.5)
+
+- **DELETE/UPDATE sem WHERE:** ao executar (F5), se o trecho tiver `DELETE` ou `UPDATE` sem `WHERE`, ou `TRUNCATE TABLE`, o QueryPilot lista as instruções (com a linha) e pergunta antes; "Não" cancela a execução. Não alerta para tabelas temporárias e variáveis de tabela, `UPDATE ... FROM ... INNER JOIN`, `MERGE`, nem para texto em comentários e strings.
+- **Abas fechadas:** ao fechar uma janela de query (ou o SSMS), o texto e a conexão ficam guardados. `Ctrl+Q, Ctrl+T` reabre a última, conectada ao mesmo servidor e banco; repetindo, reabre as anteriores. *QueryPilot › Abas fechadas...* mostra todas, com busca (é a janela do histórico com "Mostrar: Abas fechadas").
+- Os dois podem ser desligados em *Opções*.
+
 ## Formatador de SQL (v0.4)
 
 `Ctrl+K, Ctrl+Y` (ou *QueryPilot › Formatar SQL*) formata a seleção (linhas inteiras, mantendo o recuo) ou, sem seleção, a janela inteira. Um `Ctrl+Z` desfaz.

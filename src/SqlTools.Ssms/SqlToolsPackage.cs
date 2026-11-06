@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.ComponentModel.Design;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -34,6 +35,8 @@ namespace SqlTools.Ssms
         internal ExecutionMonitor Monitor { get; private set; }
         internal TabColorizer TabColorizer { get; private set; }
         internal QueryOpener Opener { get; private set; }
+        internal ClosedTabMonitor ClosedTabs { get; private set; }
+        private readonly System.Collections.Generic.HashSet<long> _reopened = new System.Collections.Generic.HashSet<long>();
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -74,14 +77,25 @@ namespace SqlTools.Ssms
                     mcs.AddCommand(new MenuCommand((s, e) => OpenDataFolder(), new CommandID(PackageGuids.CmdSet, PackageIds.OpenDataFolder)));
                     mcs.AddCommand(new MenuCommand((s, e) => RefreshMetadata(), new CommandID(PackageGuids.CmdSet, PackageIds.RefreshMetadata)));
                     mcs.AddCommand(new MenuCommand((s, e) => FormatSql(), new CommandID(PackageGuids.CmdSet, PackageIds.FormatSql)));
+                    mcs.AddCommand(new MenuCommand((s, e) => ReopenClosedTab(), new CommandID(PackageGuids.CmdSet, PackageIds.ReopenClosedTab)));
+                    mcs.AddCommand(new MenuCommand((s, e) => ShowHistory(closedTabs: true), new CommandID(PackageGuids.CmdSet, PackageIds.ShowClosedTabs)));
                 }
 
                 EnsureHistoryShortcut();
                 EnsureShortcut(PackageIds.FormatSql, "Global::Ctrl+K, Ctrl+Y", s => s.FormatShortcutApplied, s => s.FormatShortcutApplied = true);
+                EnsureShortcut(PackageIds.ReopenClosedTab, "Global::Ctrl+Q, Ctrl+T", s => s.ReopenShortcutApplied, s => s.ReopenShortcutApplied = true);
                 EnsureTopMenuAllowed();
 
                 Monitor = new ExecutionMonitor(Dte, History, Settings);
                 Monitor.Start();
+                ClosedTabs = new ClosedTabMonitor(Dte, History, Settings);
+                ClosedTabs.Start();
+                // depois de executar (USE outro_banco, troca de conexão), lembra a conexão atual da janela
+                Monitor.ExecutionRecorded += (s, e) => JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await JoinableTaskFactory.SwitchToMainThreadAsync();
+                    ClosedTabs.RememberActive();
+                }).FileAndForget(ProductInfo.Name + "/ClosedTabs");
 
                 TabColorizer = new TabColorizer(Settings);
                 Monitor.ExecutionRecorded += (s, e) => TabColorizer.RefreshSoon();
@@ -165,6 +179,27 @@ namespace SqlTools.Ssms
             }
         }
 
+        /// <summary>Reabre a aba fechada mais recente (repetindo, as anteriores), conectada ao mesmo servidor/banco.</summary>
+        internal void ReopenClosedTab()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var entry = History.Search(new HistoryQuery { ClosedTabs = true, Limit = 200 }).FirstOrDefault(e => !_reopened.Contains(e.Id));
+                if (entry == null)
+                {
+                    Dte.StatusBar.Text = ProductInfo.Name + ": nenhuma aba fechada para reabrir.";
+                    return;
+                }
+                _reopened.Add(entry.Id);
+                Opener.Open(entry);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Falha ao reabrir aba fechada.", ex);
+            }
+        }
+
         private void FormatSql()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -217,15 +252,20 @@ namespace SqlTools.Ssms
             if (removed > 0) Log.Info($"Histórico: {removed} execuções com mais de {days} dias removidas.");
         }
 
-        internal HistoryWindow CreateHistoryWindow(string initialSearch = null) =>
-            new HistoryWindow(History, entry => { ThreadHelper.ThrowIfNotOnUIThread(); Opener.Open(entry); }, initialSearch);
+        internal HistoryWindow CreateHistoryWindow(string initialSearch = null, bool closedTabs = false) =>
+            new HistoryWindow(History, entry =>
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (entry.Status == ExecutionStatus.ClosedTab) _reopened.Add(entry.Id);
+                Opener.Open(entry);
+            }, initialSearch, closedTabs);
 
-        internal void ShowHistory()
+        internal void ShowHistory(bool closedTabs = false)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
-                CreateHistoryWindow().ShowModal();
+                CreateHistoryWindow(null, closedTabs).ShowModal();
             }
             catch (Exception ex)
             {
@@ -290,6 +330,8 @@ namespace SqlTools.Ssms
         public const int OpenDataFolder = 0x0102;
         public const int RefreshMetadata = 0x0103;
         public const int FormatSql = 0x0104;
+        public const int ReopenClosedTab = 0x0105;
+        public const int ShowClosedTabs = 0x0106;
         public const int TopMenu = 0x1000;
     }
 }

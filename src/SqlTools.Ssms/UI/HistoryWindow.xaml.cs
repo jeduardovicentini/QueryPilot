@@ -41,12 +41,13 @@ namespace SqlTools.Ssms.UI
             public bool IsError { get; set; }
         }
 
-        internal HistoryWindow(HistoryStore store, Action<HistoryEntry> open, string initialSearch = null)
+        internal HistoryWindow(HistoryStore store, Action<HistoryEntry> open, string initialSearch = null, bool closedTabs = false)
         {
             _store = store;
             _open = open;
             InitializeComponent();
             Title = ProductInfo.Name + " — Histórico de queries";
+            ViewBox.SelectedIndex = closedTabs ? 1 : 0;
 
             _searchDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _searchDelay.Tick += (s, e) => { _searchDelay.Stop(); Reload(); };
@@ -87,7 +88,9 @@ namespace SqlTools.Ssms.UI
 
         private HistoryQuery BuildQuery()
         {
-            var q = new HistoryQuery { Text = SearchBox.Text, OnlyErrors = OnlyErrorsBox.IsChecked == true };
+            var closed = ViewBox.SelectedIndex == 1;
+            OnlyErrorsBox.IsEnabled = !closed;
+            var q = new HistoryQuery { Text = SearchBox.Text, OnlyErrors = !closed && OnlyErrorsBox.IsChecked == true, ClosedTabs = closed };
 
             var days = int.Parse((string)((ComboBoxItem)PeriodBox.SelectedItem ?? (ComboBoxItem)PeriodBox.Items[1]).Tag, CultureInfo.InvariantCulture);
             if (days == 0) q.FromUtc = DateTime.Today.ToUniversalTime();
@@ -116,7 +119,7 @@ namespace SqlTools.Ssms.UI
                 Grid.ItemsSource = entries.Select(ToRow).ToList();
                 CountText.Text = entries.Count >= q.Limit
                     ? $"Mostrando as {entries.Count} mais recentes. Refine a busca para ver outras."
-                    : $"{entries.Count} execução(ões)";
+                    : q.ClosedTabs ? $"{entries.Count} aba(s) fechada(s)" : $"{entries.Count} execução(ões)";
                 if (entries.Count > 0) Grid.SelectedIndex = 0;
                 else { Preview.Text = ""; DetailText.Text = ""; }
             }
@@ -147,6 +150,7 @@ namespace SqlTools.Ssms.UI
                 case ExecutionStatus.Success: return "OK";
                 case ExecutionStatus.Error: return "Erro";
                 case ExecutionStatus.Cancelled: return "Cancelada";
+                case ExecutionStatus.ClosedTab: return "Fechada";
                 default: return "—";
             }
         }
