@@ -375,6 +375,33 @@ namespace SqlTools.Core.Tests
             Assert.Equal("@nome", r.items.First().DisplayText);
         }
 
+        [Theory]
+        [InlineData("SELECT *\r\nFrom Customer  \r\nwhere   |\r\nAND Email = '08270016'")]
+        [InlineData("SELECT *\r\nFrom Customer  \r\nwhere   Na|\r\nAND Email = '08270016'")]
+        [InlineData("SELECT *\r\nFrom Customer  \r\nwhere Name = 'x' AND |")]
+        [InlineData("SELECT *\r\nFrom dbo.Customer\r\nwhere |")]
+        public void Colunas_no_where_sem_alias(string sql)
+        {
+            var r = Run(sql);
+            Assert.True(r.items.Any(i => i.Kind == SuggestionKind.Column && i.DisplayText == "Name"),
+                r.ctx.Kind + ": " + string.Join(", ", r.items.Take(15)));
+        }
+
+        [Theory]
+        [InlineData("SELECT * FROM T where |", true)]
+        [InlineData("SELECT * FROM T WHERE a = 1 AND   |", true)]
+        [InlineData("SELECT * FROM T t JOIN U u ON |", true)]
+        [InlineData("SELECT * FROM T ORDER BY |", true)]
+        [InlineData("SELECT * FROM T WHERE a = |", false)]
+        [InlineData("SELECT * FROM T WHERE nome |", false)]
+        [InlineData("SELECT * FROM T WHERE|", false)]
+        [InlineData("SELECT 'AND |", false)]
+        public void Lista_abre_depois_de_where_and_or(string sql, bool expected)
+        {
+            var caret = sql.IndexOf('|');
+            Assert.Equal(expected, SqlContextAnalyzer.AfterConditionKeyword(sql.Remove(caret, 1), caret));
+        }
+
         [Fact]
         public void Snippets_no_inicio_da_instrucao()
         {

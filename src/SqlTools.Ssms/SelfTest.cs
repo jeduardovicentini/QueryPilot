@@ -269,6 +269,18 @@ namespace SqlTools.Ssms
             var snip = view.TextSnapshot.GetText();
             check("Completion: snippet ssf + Tab", snip == "SELECT * FROM", snip);
 
+            // WHERE + espaço, sem alias: a lista de colunas abre sozinha
+            SetText(dte, "SELECT * FROM Customer\r\n");
+            view.Caret.MoveTo(new Microsoft.VisualStudio.Text.SnapshotPoint(view.TextSnapshot, view.TextSnapshot.Length));
+            await EditorAccess.TypeAsync(view, "where ");
+            await Task.Delay(1500);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var whereSession = EditorAccess.ComponentModel.GetService<Microsoft.VisualStudio.Language.Intellisense.AsyncCompletion.IAsyncCompletionBroker>().GetSession(view);
+            var whereItems = whereSession?.GetComputedItems(System.Threading.CancellationToken.None)?.Items.Select(i => i.DisplayText).ToList() ?? new List<string>();
+            check("Completion: WHERE + espaço sem alias abre as colunas", whereItems.Contains("Name") && whereItems.Contains("Email"),
+                (whereSession == null ? "(sem sessão) " : "") + string.Join(",", whereItems.Take(12)));
+            whereSession?.Dismiss();
+
             await SnippetChecksAsync(pkg, dte, view, check);
 
             // Tab com o cursor no *: expande as colunas e cria o alias

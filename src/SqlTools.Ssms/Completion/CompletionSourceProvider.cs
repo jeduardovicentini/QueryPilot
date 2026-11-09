@@ -124,7 +124,9 @@ namespace SqlTools.Ssms.Completion
             if (ctx.Kind == ContextKind.StarExpansion || ctx.Kind == ContextKind.AfterTableRef) return false;
             if (c == '.') return ctx.Kind == ContextKind.Member;
             if (c == '@') return ctx.Kind == ContextKind.Variable;
-            if (c == ' ') return AfterSpace.Contains(ctx.Kind);
+            if (c == ' ')
+                return AfterSpace.Contains(ctx.Kind) ||
+                       ctx.Kind == ContextKind.Expression && SqlContextAnalyzer.AfterConditionKeyword(at.Snapshot.GetText(0, at.Position), at.Position);
             if (c == '(' || c == ',') return ctx.Kind == ContextKind.InsertColumns || (c == ',' && (ctx.Kind == ContextKind.ObjectName || ctx.Kind == ContextKind.ProcParameters));
             if (char.IsLetter(c) || c == '_' || c == '#')
             {

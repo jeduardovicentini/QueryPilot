@@ -99,6 +99,19 @@ namespace SqlTools.Completion
     public static class SqlContextAnalyzer
     {
         private static readonly string[] ObjectKeywords = { "FROM", "JOIN", "UPDATE", "INTO", "MERGE", "USING", "APPLY" };
+        private static readonly string[] ConditionKeywords = { "WHERE", "AND", "OR", "ON", "HAVING", "BY", "WHEN", "THEN", "ELSE", "NOT" };
+
+        /// <summary>
+        /// A última palavra antes da posição é WHERE/AND/OR/ON/...: a lista de colunas abre sozinha depois do espaço
+        /// (sem alias, não há o "alias." para abrir).
+        /// </summary>
+        public static bool AfterConditionKeyword(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position <= 0) return false;
+            var head = text.Substring(0, Math.Min(position, text.Length));
+            var last = SqlTokenizer.Tokenize(head).LastOrDefault(t => t.Kind != TokenKind.Comment);
+            return last != null && last.End < head.Length && last.Is(ConditionKeywords);
+        }
 
         public static SqlCompletionContext Analyze(string text, int caret)
         {
